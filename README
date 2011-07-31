@@ -1,4 +1,4 @@
-A very small web application framework for Python.
+Pico is a very small web application framework for Python.
 
 In a single (small) file it is a server, a Python libary and a Javascript library!
 
