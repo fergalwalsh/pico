@@ -10,6 +10,7 @@ import mimetypes
 import urlparse
 import hashlib
 import decimal
+import traceback
 
 import pico as caching
 
@@ -317,11 +318,9 @@ def simple_app(environ, start_response):
     params = cgi.parse_qs(params)
     for k in params:
         params[k] = params[k][0]
+    print('------') 
     print(params)
     picojs = json.loads(params.get('picojs', 'false'))
-    # path = environ['PATH_INFO']
-    # if not path.endswith('/'):
-    #     path = path + '/'
     status = '200 OK'
     headers = [('Content-type', 'text/plain')]
     try:
@@ -343,14 +342,14 @@ def simple_app(environ, start_response):
             ]
             response = open(file_path)
     except Exception, e:
-        print(e)
-        response = str(e)
+        tb = traceback.extract_tb(sys.exc_info()[2])[-1]
+        tb_str = "File '%s', line %s, in %s"%(tb[0], tb[1], tb[2])
+        response = 'Python exception: %s. %s'%(e, tb_str)
+        print(response)
         if picojs: 
             response = 'pico.onerror("' + response + '");'
         else:
             status = '500 ' + str(e)
-        # import pdb
-        # pdb.set_trace()
     start_response(status, headers)
     if isinstance(response, str):
         response = [response,]
