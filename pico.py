@@ -33,15 +33,12 @@ class Pico(object):
         pass    
 
 def call_function(module_name, function_name, parameters):
-    try:
-        module = load_module(module_name)
-    except ImportError, e:
-        raise Exception("No matching module availble. You asked for %s!"%(module_name))
+    module = load_module(module_name)
     try:
         f = getattr(module, function_name)
-        results = f(*parameters)
     except AttributeError, e:
         raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function, parameters))
+    results = f(*parameters)
     return to_json(results)
 
 def call_method(module_name, class_name, method_name, parameters, init_args):
@@ -102,11 +99,8 @@ def get_module(params, url):
         module = globals()[module_name]
         response += "window['%s'] = %s;"%(module_name, js_proxy_class(module))
     else:
-        try:
-            module = load_module(module_name)
-            response += "window['%s'] = %s;"%(module_name, js_proxy_module(module))
-        except ImportError, e:
-            raise Exception("No matching module availble. You asked for %s!. Error: %s"%(module_name, e))
+        module = load_module(module_name)
+        response += "window['%s'] = %s;"%(module_name, js_proxy_module(module))
     if callback != '':
         response += "\n%s(%s);"%(callback, module_name)
     return response
@@ -128,7 +122,7 @@ if(typeof pico === 'undefined')
         if(callback)
         {
             var callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
-            window[callback_name] = callback;
+            window[callback_name] = function(data){callback(data); delete window[callback_name]};
             url += '&callback=' + callback_name;
         }
         url += '&picojs=true';
@@ -140,7 +134,7 @@ if(typeof pico === 'undefined')
             var script = document.createElement('script');
             script.type = 'text/javascript';
             script.src = url;
-            eval('script.onload = function(){console.debug("' + url + '")}');
+            script.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
             elem.appendChild(script);
             console.log("pico.get in BODY " + url);
         }
@@ -181,7 +175,11 @@ if(typeof pico === 'undefined')
         var args = Array.prototype.slice.call(args);
         args = args.map(function(a){return (isFinite(a) && parseFloat(a)) || a});
         if(args.slice(-1)[0] instanceof Function) var callback = args.pop(-1);
+        else if(object.__default_callback__) var callback = object.__default_callback__;
         else var callback = function(response){console.debug(response)};
+        
+        var new_callback = function(callback, response){ callback(response, {'object': object, 'method_name': method_name});  };
+        callback = pico.partial(new_callback, callback);
         
         var url = pico.url + '/call/?module='+module+'&class=' + class + '&function='+method_name+'&parameters='+JSON.stringify(args);
         if(init_args.length > 0) url+= '&init=' + JSON.stringify(init_args);
@@ -212,6 +210,8 @@ if(typeof pico === 'undefined')
             return func.apply(this, allArguments);
         };
     }
+    pico.main = function(){console.log('Pico: DOMContentLoaded')};
+    document.addEventListener('DOMContentLoaded', function(){pico.main()});
 }
 """%{'url': url}
     return response
