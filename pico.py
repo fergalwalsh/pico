@@ -11,6 +11,11 @@ import urlparse
 import hashlib
 import decimal
 import traceback
+import getopt
+import re
+
+import wsgiref
+import SocketServer
 
 import pico as caching
 
@@ -23,14 +28,34 @@ def cacheable(func):
 
 
 def main():
-    httpd = make_server('', 8800, simple_app)
-    print "Serving on port 8800..."
-    httpd.serve_forever()
+    opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port="])
+    args = dict(opts_args[0])
+    port = int(args.get('--port', args.get('-p', 8800)))
+    multithreaded = '-m' in args
+    host = '0.0.0.0' #'localhost'
+    app = wsgi_app
+    if multithreaded:
+        class ThreadedTCPServer(SocketServer.ForkingMixIn, wsgiref.simple_server.WSGIServer):
+            pass
+        server = ThreadedTCPServer((host, port), wsgiref.simple_server.WSGIRequestHandler)
+        server.set_app(app)
+        server_type = 'multiple threads'
+    else:
+        server = make_server(host, port, app)
+        server_type = 'a single thread'
+    print("Serving on http://localhost:%s/"%port)
+    print("Using %s."%server_type)
+    print("URL map: ")
+    print('\t' + '\n\t'.join(["%s : %s "%(url, path) for url, path in static_url_map]))
+    print("Hit CTRL-C to end")
+    server.serve_forever()
     
 
 class Pico(object):
-    def __init__(self, arg):
-        pass    
+    def __init__(self):
+        pass
+    
+    
 
 def call_function(module_name, function_name, parameters):
     module = load_module(module_name)
@@ -97,10 +122,15 @@ def get_module(params, url):
     if module_name in globals():
         print('loading class')
         module = globals()[module_name]
-        response += "window['%s'] = %s;"%(module_name, js_proxy_class(module))
+        js_proxy = js_proxy_class(module)
     else:
         module = load_module(module_name)
-        response += "window['%s'] = %s;"%(module_name, js_proxy_module(module))
+        js_proxy = js_proxy_module(module)
+    a = "window"
+    for n in module_name.split('.'):
+        response += 'if(%s.%s == undefined)%s.%s={}; '%(a,n,a,n)
+        a += "." + n
+    response += "\n%s = %s;"%(module_name, js_proxy)
     if callback != '':
         response += "\n%s(%s);"%(callback, module_name)
     return response
@@ -118,30 +148,48 @@ if(typeof pico === 'undefined')
     pico.onerror = function(e){console.error(e)}
     pico.get = function(url, callback)
     {
-        if(!url.contains('?')) url += '?';
+        var callback_name = 'console.log';
         if(callback)
         {
-            var callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
+            if(!url.contains('?')) url += '?';
+            callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
             window[callback_name] = function(data){callback(data); delete window[callback_name]};
             url += '&callback=' + callback_name;
         }
-        url += '&picojs=true';
+        if(url.contains('?')) url += '&picojs=true';
         url = encodeURI(url);
         var elem;
         if(document.getElementsByTagName("body").length > 0)
         {
             elem = document.getElementsByTagName("body")[0];
-            var script = document.createElement('script');
-            script.type = 'text/javascript';
-            script.src = url;
-            script.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
-            elem.appendChild(script);
+            if(url.substr(-4) == '.css'){
+                var style = document.createElement('link');
+                style.type = 'text/css';
+                style.src = url;
+                style.rel = "stylesheet";
+                style.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
+                elem.appendChild(script);
+            }
+            else{
+                var script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.src = url;
+                script.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
+                elem.appendChild(script);
+            }
             console.log("pico.get in BODY " + url);
         }
         else
         {
             console.log("pico.get in HEAD " + url);
-            document.write('<script type="text/javascript"  src="' + url + '"></scr' + 'ipt>');
+            if(url.substr(-4) == '.css'){
+                document.write('<link type="text/css" href="' + url + '" rel="stylesheet" />');
+            }
+            else
+            {
+                document.write('<script type="text/javascript" onload="'+callback_name+'()"  src="' + url + '"></scr' + 'ipt>');
+            }
+            
         }
     }
     pico.call_module_function = function(module, function_name, args, use_cache)
@@ -150,7 +198,7 @@ if(typeof pico === 'undefined')
         args = args.map(function(a){return (isFinite(a) && parseFloat(a)) || a});
         if(args.slice(-1)[0] instanceof Function) var callback = args.pop(-1);
         else var callback = function(response){console.debug(response)};
-        var url = pico.url + '/call/?module='+module+'&function='+function_name+'&parameters='+JSON.stringify(args);
+        var url = pico.url + '/pico/call/?module='+module+'&function='+function_name+'&parameters='+JSON.stringify(args);
         if(use_cache && pico.cache[url])
         {
             console.log("Served from client side cache: " + url);
@@ -169,7 +217,7 @@ if(typeof pico === 'undefined')
     pico.call_class_method = function(object, method_name, args, use_cache)
     {
         var module = object.__module__;
-        var class = object.__class__;
+        var class_name = object.__class__;
         var init_args = object.__args__;
         
         var args = Array.prototype.slice.call(args);
@@ -181,7 +229,7 @@ if(typeof pico === 'undefined')
         var new_callback = function(callback, response){ callback(response, {'object': object, 'method_name': method_name});  };
         callback = pico.partial(new_callback, callback);
         
-        var url = pico.url + '/call/?module='+module+'&class=' + class + '&function='+method_name+'&parameters='+JSON.stringify(args);
+        var url = pico.url + '/pico/call/?module='+module+'&class=' + class_name + '&function='+method_name+'&parameters='+JSON.stringify(args);
         if(init_args.length > 0) url+= '&init=' + JSON.stringify(init_args);
         if(use_cache && pico.cache[url])
         {
@@ -200,7 +248,7 @@ if(typeof pico === 'undefined')
     }
     pico.import = function(module, result_handler)
     {
-        var url = pico.url + '/module/?module='+module;
+        var url = pico.url + '/pico/module/?module='+module;
         pico.get(url, result_handler);
     }
     pico.partial = function(func /*, 0..n args */) {
@@ -211,7 +259,7 @@ if(typeof pico === 'undefined')
         };
     }
     pico.main = function(){console.log('Pico: DOMContentLoaded')};
-    document.addEventListener('DOMContentLoaded', function(){pico.main()});
+    document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
 }
 """%{'url': url}
     return response
@@ -221,12 +269,11 @@ def error(params):
 
 def load_module(module_name):
     modules_path = './'
-    module = module_name
-    module = module[0].lower() + module[1:]
-    caching.cacheable_functions[module] = {}
+    caching.cacheable_functions[module_name] = {}
     if not sys.path.__contains__(modules_path):
         sys.path.insert(0, modules_path)
-    m = __import__(module)
+    __import__(module_name)
+    m = sys.modules[module_name]
     m = reload(m)
     print("Module %s loaded"%module_name)
     if not (hasattr(m, 'pico') and m.pico.magic == magic):
@@ -241,7 +288,9 @@ def js_proxy_module(module):
     functions = []
     for m in inspect.getmembers(module, inspect.isfunction):
         if not m[0].startswith('_'):
-            functions.append((m[0],inspect.getargspec(m[1])[0], '@pico.caching.cacheable' in inspect.getsource(m[1])))
+            #cachable = '@pico.caching.cacheable' in inspect.getsource(m[1])
+            cachable = False
+            functions.append((m[0],inspect.getargspec(m[1])[0], cachable))
     object_name = module.__name__
     for function_name, parameters, cache in functions:
         params = parameters + ['callback']
@@ -258,7 +307,9 @@ def js_proxy_class(cls):
     methods = {}
     for m in inspect.getmembers(cls, inspect.ismethod):
         if not m[0].startswith('_') or m[0] == '__init__':
-            methods[m[0]] = (m[0],inspect.getargspec(m[1])[0], '@pico.caching.cacheable' in inspect.getsource(m[1]))
+            #cachable = '@pico.caching.cacheable' in inspect.getsource(m[1])
+            cachable = False
+            methods[m[0]] = (m[0],inspect.getargspec(m[1])[0], cachable)
     class_name = cls.__name__
     out = """(function() {
     var %(class)s = function(%(args)s) {
@@ -296,13 +347,18 @@ def to_json(obj, precision=None):
     if hasattr(obj, 'json'):
         s = obj.json
     else:
+        if type(obj) == dict: # convert non string keys to strings
+            for k in obj:
+                if not isinstance(k, basestring):
+                    obj[str(k)] = obj[k]
+                    del obj[k]
         s = json.dumps(obj, cls=Encoder, separators=(',',':'))
     return s
 
 
 
 
-def simple_app(environ, start_response):
+def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
     try:
       request_body_size = int(environ.get('CONTENT_LENGTH', 0))
@@ -318,7 +374,7 @@ def simple_app(environ, start_response):
     params = cgi.parse_qs(params)
     for k in params:
         params[k] = params[k][0]
-    print('------') 
+    print('------')
     print(params)
     picojs = json.loads(params.get('picojs', 'false'))
     status = '200 OK'
@@ -333,17 +389,28 @@ def simple_app(environ, start_response):
         if handler:
             response = handler(params, base_url)
         else:
-            file_path = path[1:]
-            size = os.path.getsize(file_path)
-            mimetype = mimetypes.guess_type(file_path)
-            headers = [
-                ("Content-type", mimetype[0]),
-                ("Content-length", str(size)),
-            ]
-            response = open(file_path)
+            file_path = ''
+            for (url, directory) in static_url_map:
+                m = re.match(url, path)
+                if m:
+                    file_path = directory + ''.join(m.groups())
+            print("Serving: " + file_path)
+            if os.path.isfile(file_path):
+                size = os.path.getsize(file_path)
+                mimetype = mimetypes.guess_type(file_path)
+                headers = [
+                    ("Content-type", mimetype[0]),
+                    ("Content-length", str(size)),
+                ]
+                response = open(file_path)
+            else:
+                status = "404 NOT FOUND"
+                response = "File not found!"
     except Exception, e:
-        tb = traceback.extract_tb(sys.exc_info()[2])[-1]
-        tb_str = "File '%s', line %s, in %s"%(tb[0], tb[1], tb[2])
+        full_tb = traceback.extract_tb(sys.exc_info()[2])
+        tb_str = ''
+        for tb in full_tb:
+            tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
         response = 'Python exception: %s. %s'%(e, tb_str)
         print(response)
         if picojs: 
@@ -362,10 +429,13 @@ jsonifiers = {
 
 base_path = ''
 url_handlers = {
-    '/call/': call,
-    '/module/': get_module,
-    '/pico.js': base
+    '/pico/call/': call,
+    '/pico/module/': get_module,
+    '/pico/pico.js': base
 }
+static_url_map = [
+('^/(.*)$', './'),
+]
 magic = 'hjksdfjgg;jfgfdggldfgj' # used in the check to see if a module has explicitly imported Pico to make it Picoable    
 if __name__ == '__main__':
     main()
