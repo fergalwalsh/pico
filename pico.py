@@ -13,6 +13,7 @@ import decimal
 import traceback
 import getopt
 import re
+import datetime
 
 import wsgiref
 import SocketServer
@@ -57,27 +58,25 @@ class Pico(object):
     
     
 
-def call_function(module_name, function_name, parameters):
-    module = load_module(module_name)
+def call_function(module, function_name, parameters):
     try:
         f = getattr(module, function_name)
     except AttributeError, e:
         raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function, parameters))
     results = f(*parameters)
-    return to_json(results)
+    return results
 
-def call_method(module_name, class_name, method_name, parameters, init_args):
+def call_method(module, class_name, method_name, parameters, init_args):
     try:
-        module = load_module(module_name)
         obj = getattr(module, class_name)(*init_args)
     except KeyError, e:
         raise Exception("No matching class availble. You asked for %s!"%(class_name))
     try:
         f = getattr(obj, method_name)
-        results = f(*parameters)
     except AttributeError, e:
         raise Exception("No matching method availble. You asked for %s with these parameters %s!"%(method_name, parameters))
-    return to_json(results)
+    results = f(*parameters)
+    return results
 
 def call(params, url):
     function = params.get('function', '')
@@ -100,10 +99,14 @@ def call(params, url):
         except IOError:
             pass
     if not response:
+        module = load_module(module_name)
+        parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
         if class_name:
-            response = call_method(module_name, class_name, function, parameters, init_args)
+            init_args = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), init_args)
+            response = call_method(module, class_name, function, parameters, init_args)
         else:
-            response = call_function(module_name, function, parameters)
+            response = call_function(module, function, parameters)
+        response = to_json(response, getattr(module, "json_dumpers", {}))
         if should_cache:
             print("Saving to cache")
             f = open(cache_path + cache_filename, 'w')
@@ -126,6 +129,7 @@ def get_module(params, url):
     else:
         module = load_module(module_name)
         js_proxy = js_proxy_module(module)
+    response += 'pico.urls["%s"] = "%s";\n'%(module_name, url)
     a = "window"
     for n in module_name.split('.'):
         response += 'if(%s.%s == undefined)%s.%s={}; '%(a,n,a,n)
@@ -144,6 +148,7 @@ if(typeof pico === 'undefined')
     if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
     pico = {};
     pico.url = '%(url)s';
+    pico.urls = [];
     pico.cache = {};
     pico.onerror = function(e){console.error(e)}
     pico.get = function(url, callback)
@@ -198,7 +203,7 @@ if(typeof pico === 'undefined')
         args = args.map(function(a){return (isFinite(a) && parseFloat(a)) || a});
         if(args.slice(-1)[0] instanceof Function) var callback = args.pop(-1);
         else var callback = function(response){console.debug(response)};
-        var url = pico.url + '/pico/call/?module='+module+'&function='+function_name+'&parameters='+JSON.stringify(args);
+        var url = pico.urls[module] + '/pico/call/?module='+module+'&function='+function_name+'&parameters='+JSON.stringify(args);
         if(use_cache && pico.cache[url])
         {
             console.log("Served from client side cache: " + url);
@@ -229,7 +234,7 @@ if(typeof pico === 'undefined')
         var new_callback = function(callback, response){ callback(response, {'object': object, 'method_name': method_name});  };
         callback = pico.partial(new_callback, callback);
         
-        var url = pico.url + '/pico/call/?module='+module+'&class=' + class_name + '&function='+method_name+'&parameters='+JSON.stringify(args);
+        var url = pico.urls[module] + '/pico/call/?module='+module+'&class=' + class_name + '&function='+method_name+'&parameters='+JSON.stringify(args);
         if(init_args.length > 0) url+= '&init=' + JSON.stringify(init_args);
         if(use_cache && pico.cache[url])
         {
@@ -248,7 +253,8 @@ if(typeof pico === 'undefined')
     }
     pico.import = function(module, result_handler)
     {
-        var url = pico.url + '/pico/module/?module='+module;
+        if(module.substr(0, 7) != 'http://') var url = pico.url + '/pico/module/?module='+module;
+        else var url = module;
         pico.get(url, result_handler);
     }
     pico.partial = function(func /*, 0..n args */) {
@@ -270,6 +276,7 @@ def error(params):
 def load_module(module_name):
     modules_path = './'
     caching.cacheable_functions[module_name] = {}
+    if module_name in sys.modules: del sys.modules[module_name]
     if not sys.path.__contains__(modules_path):
         sys.path.insert(0, modules_path)
     __import__(module_name)
@@ -330,32 +337,51 @@ def js_proxy_class(cls):
     })()"""%{'class': class_name}
     return out
 
-class Encoder(json.JSONEncoder):
-    def default(self, obj):
-        if type(obj) in jsonifiers:
-            return jsonifiers[type(obj)](obj)
-        elif hasattr(obj, 'json'):
-            return json.loads(obj.json)
-        elif hasattr(obj, 'tolist'):
-            return obj.tolist()
-        elif hasattr(obj, '__iter__'):
-            return list(obj)
-        else:
-            return str(obj)
+
+def convert_keys(obj):
+    if type(obj) == dict: # convert non string keys to strings
+        for k in obj:
+            convert_keys(obj[k])
+            if not isinstance(k, basestring):
+                obj[str(k)] = obj[k]
+                del obj[k]
+
     
-def to_json(obj, precision=None):
-    if hasattr(obj, 'json'):
-        s = obj.json
-    else:
-        if type(obj) == dict: # convert non string keys to strings
-            for k in obj:
-                if not isinstance(k, basestring):
-                    obj[str(k)] = obj[k]
-                    del obj[k]
-        s = json.dumps(obj, cls=Encoder, separators=(',',':'))
+def to_json(obj, _json_dumpers = {}):
+    class Encoder(json.JSONEncoder):
+        def default(self, obj):
+            if type(obj) in _json_dumpers:
+                obj = _json_dumpers[type(obj)](obj)
+                convert_keys(obj)
+                return obj
+            if hasattr(obj, 'json'):
+                return json.loads(obj.json)
+            elif hasattr(obj, 'tolist'):
+                return obj.tolist()
+            elif hasattr(obj, '__iter__'):
+                return list(obj)
+            else:
+                return str(obj)
+    
+        def encode(self, obj):
+            convert_keys(obj)
+            return json.JSONEncoder.encode(self, obj)
+    for k in json_dumpers:
+        if k not in _json_dumpers:
+            _json_dumpers[k] = json_dumpers
+    s = json.dumps(obj, cls=Encoder, separators=(',',':'))
     return s
 
-
+def from_json(v, _json_loaders = []):
+    if isinstance(v, basestring):
+        _json_loaders.extend(json_loaders)
+        for f in _json_loaders:
+            try:
+                v = f(v)
+                break
+            except Exception, e:
+                continue
+    return v
 
 
 def wsgi_app(environ, start_response):
@@ -423,9 +449,13 @@ def wsgi_app(environ, start_response):
     return response
 
 
-jsonifiers = {
+json_dumpers = {
     decimal.Decimal: lambda d: float(d)
 }
+
+json_loaders = [
+lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+]
 
 base_path = ''
 url_handlers = {
