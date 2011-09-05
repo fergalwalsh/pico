@@ -27,6 +27,9 @@ def cacheable(func):
     cacheable_functions.setdefault(func.__module__, {})[func.__name__] = True
     return func
 
+def private(func):
+    func.private = True
+    return func
 
 def main():
     opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port="])
@@ -61,8 +64,10 @@ class Pico(object):
 def call_function(module, function_name, parameters):
     try:
         f = getattr(module, function_name)
-    except AttributeError, e:
-        raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function, parameters))
+        if hasattr(f, 'private') and f.private:
+            raise Exception()
+    except:
+        raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function_name, parameters))
     results = f(*parameters)
     return results
 
@@ -73,7 +78,9 @@ def call_method(module, class_name, method_name, parameters, init_args):
         raise Exception("No matching class availble. You asked for %s!"%(class_name))
     try:
         f = getattr(obj, method_name)
-    except AttributeError, e:
+        if hasattr(f, 'private') and f.private:
+            raise Exception()
+    except:
         raise Exception("No matching method availble. You asked for %s with these parameters %s!"%(method_name, parameters))
     results = f(*parameters)
     return results
@@ -294,7 +301,7 @@ def js_proxy_module(module):
         out += '"%s": %s,\n'%(class_name, js_proxy_class(cls))
     functions = []
     for m in inspect.getmembers(module, inspect.isfunction):
-        if not m[0].startswith('_'):
+        if not (m[0].startswith('_') or (hasattr(m[1], 'private') and m[1].private)):
             #cachable = '@pico.caching.cacheable' in inspect.getsource(m[1])
             cachable = False
             functions.append((m[0],inspect.getargspec(m[1])[0], cachable))
@@ -313,7 +320,7 @@ def js_proxy_module(module):
 def js_proxy_class(cls):
     methods = {}
     for m in inspect.getmembers(cls, inspect.ismethod):
-        if not m[0].startswith('_') or m[0] == '__init__':
+        if not (m[0].startswith('_')  or (hasattr(m[1], 'private') and m[1].private)) or m[0] == '__init__':
             #cachable = '@pico.caching.cacheable' in inspect.getsource(m[1])
             cachable = False
             methods[m[0]] = (m[0],inspect.getargspec(m[1])[0], cachable)
