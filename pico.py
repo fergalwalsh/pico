@@ -376,6 +376,7 @@ def to_json(obj, _json_dumpers = {}):
     for k in json_dumpers:
         if k not in _json_dumpers:
             _json_dumpers[k] = json_dumpers
+    convert_keys(obj)
     s = json.dumps(obj, cls=Encoder, separators=(',',':'))
     return s
 
