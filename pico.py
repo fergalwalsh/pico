@@ -18,13 +18,8 @@ import datetime
 import wsgiref
 import SocketServer
 
-import pico as caching
-
-cacheable_functions = {}
-
 def cacheable(func):
     func.cacheable = True
-    cacheable_functions.setdefault(func.__module__, {})[func.__name__] = True
     return func
 
 def private(func):
@@ -69,7 +64,7 @@ def call_function(module, function_name, parameters):
     except:
         raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function_name, parameters))
     results = f(*parameters)
-    return results
+    return results, (hasattr(f, 'cacheable') and f.cacheable)
 
 def call_method(module, class_name, method_name, parameters, init_args):
     try:
@@ -83,7 +78,13 @@ def call_method(module, class_name, method_name, parameters, init_args):
     except:
         raise Exception("No matching method availble. You asked for %s with these parameters %s!"%(method_name, parameters))
     results = f(*parameters)
-    return results
+    return results, (hasattr(f, 'cacheable') and f.cacheable)
+
+def cache_key(params):
+    hashstring = hashlib.md5(str(params)).hexdigest()
+    cache_key = "%s_%s_%s_%s"%(params.get('module', ''), params.get('class', ''), params.get('function', ''), hashstring)
+    return cache_key.replace('.', '_')
+
 
 def call(params, url):
     function = params.get('function', '')
@@ -94,14 +95,11 @@ def call(params, url):
     module_name = params.get('module', '')
     init_args = json.loads(params.get('init', '[]'))
     class_name = params.get('class', None)
-    # check if it is a cacheable function
-    should_cache = caching.cacheable_functions.get(module_name, {}).get(function, False)
+    usecache = json.loads(params.get('usecache', 'false'))
     response = None
-    if should_cache:
-        cache_path = './cache/'
-        cache_filename = module_name + '_' + function + '_' + str(hashlib.md5(params.get('parameters', '[]')).hexdigest())
+    if usecache and os.path.exists(cache_path):
         try:
-            response = open(cache_path + cache_filename).read()
+            response = open(cache_path + cache_key(params)).read()
             print("Serving from cache")
         except IOError:
             pass
@@ -110,13 +108,17 @@ def call(params, url):
         parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
         if class_name:
             init_args = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), init_args)
-            response = call_method(module, class_name, function, parameters, init_args)
+            response, cacheable = call_method(module, class_name, function, parameters, init_args)
         else:
-            response = call_function(module, function, parameters)
+            response, cacheable = call_function(module, function, parameters)
         response = to_json(response, getattr(module, "json_dumpers", {}))
-        if should_cache:
+        if usecache and cacheable:
+            try:
+                os.stat(cache_path)
+            except:
+                os.mkdir(cache_path)
             print("Saving to cache")
-            f = open(cache_path + cache_filename, 'w')
+            f = open(cache_path + cache_key(params), 'w')
             f.write(response)
             f.close()
     if callback != '':
@@ -157,6 +159,7 @@ if(typeof pico === 'undefined')
     pico.url = '%(url)s';
     pico.urls = [];
     pico.cache = {};
+    pico.cache.enabled = true;
     pico.onerror = function(e){console.error(e)}
     pico.get = function(url, callback)
     {
@@ -211,17 +214,18 @@ if(typeof pico === 'undefined')
         if(args.slice(-1)[0] instanceof Function) var callback = args.pop(-1);
         else var callback = function(response){console.debug(response)};
         var url = pico.urls[module] + '/pico/call/?module='+module+'&function='+function_name+'&parameters='+JSON.stringify(args);
-        if(use_cache && pico.cache[url])
+        if(pico.cache.enabled && use_cache && pico.cache[url])
         {
             console.log("Served from client side cache: " + url);
             callback(pico.cache[url]);
         }
         else
         {
-            if(use_cache)
+            if(pico.cache.enabled && use_cache)
             {
                 var new_callback = function(callback, response){ pico.cache[url] = response; callback(response) }
                 callback = pico.partial(new_callback, callback);
+                url += '&usecache=true'
             }
             pico.get(url, callback);
         }
@@ -243,17 +247,18 @@ if(typeof pico === 'undefined')
         
         var url = pico.urls[module] + '/pico/call/?module='+module+'&class=' + class_name + '&function='+method_name+'&parameters='+JSON.stringify(args);
         if(init_args.length > 0) url+= '&init=' + JSON.stringify(init_args);
-        if(use_cache && pico.cache[url])
+        if(pico.cache.enabled && use_cache && pico.cache[url])
         {
             console.log("Served from client side cache: " + url);
             callback(pico.cache[url]);
         }
         else
         {
-            if(use_cache)
+            if(pico.cache.enabled && use_cache)
             {
                 var new_callback = function(callback, response){ pico.cache[url] = response; callback(response) }
                 callback = pico.partial(new_callback, callback);
+                url += '&usecache=true'
             }
             pico.get(url, callback);
         }
@@ -282,7 +287,6 @@ def error(params):
 
 def load_module(module_name):
     modules_path = './'
-    caching.cacheable_functions[module_name] = {}
     if module_name in sys.modules: del sys.modules[module_name]
     if not sys.path.__contains__(modules_path):
         sys.path.insert(0, modules_path)
@@ -303,7 +307,7 @@ def js_proxy_module(module):
     for m in inspect.getmembers(module, inspect.isfunction):
         if not (m[0].startswith('_') or (hasattr(m[1], 'private') and m[1].private)):
             #cachable = '@pico.caching.cacheable' in inspect.getsource(m[1])
-            cachable = False
+            cachable = ((hasattr(m[1], 'cacheable') and m[1].cacheable))
             functions.append((m[0],inspect.getargspec(m[1])[0], cachable))
     object_name = module.__name__
     for function_name, parameters, cache in functions:
@@ -322,7 +326,7 @@ def js_proxy_class(cls):
     for m in inspect.getmembers(cls, inspect.ismethod):
         if not (m[0].startswith('_')  or (hasattr(m[1], 'private') and m[1].private)) or m[0] == '__init__':
             #cachable = '@pico.caching.cacheable' in inspect.getsource(m[1])
-            cachable = False
+            cachable = ((hasattr(m[1], 'cacheable') and m[1].cacheable))
             methods[m[0]] = (m[0],inspect.getargspec(m[1])[0], cachable)
     class_name = cls.__name__
     out = """(function() {
@@ -464,6 +468,8 @@ json_dumpers = {
 json_loaders = [
 lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
 ]
+
+cache_path = './cache/'
 
 base_path = ''
 url_handlers = {
