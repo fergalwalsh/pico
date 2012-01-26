@@ -1,7 +1,6 @@
 import json
 import os
 import decimal
-import inspect
 
 path = (os.path.dirname(__file__) or '.') + '/'
 
@@ -97,4 +96,3 @@ lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
 ]
 
 magic = 'hjksdfjgg;jfgfdggldfgj' # used in the check to see if a module has explicitly imported Pico to make it Picoable
-STREAMING = False

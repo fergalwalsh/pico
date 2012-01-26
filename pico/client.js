@@ -146,14 +146,11 @@ var pico = (function(){
     pico.load = function(module, result_handler)
     {
         var params = {};
-        if(module.substr(0, 7) != 'http://'){
-            var url = pico.url + 'module/';
-            params['_module'] = module;
-        }
-        else var url = module;
+        var url = pico.url + 'module/';
+        params['_module'] = module;
         var callback = function(result){
             var m = window;
-            module_name_parts = module.split('.');
+            var module_name_parts = module.split('.');
             for(var i in module_name_parts){
                 var s = module_name_parts[i];
                 m[s] = m[s] || {};
@@ -163,7 +160,6 @@ var pico = (function(){
             var scripts = document.getElementsByTagName("script");
             var src = scripts[scripts.length-1].src;
             m.__url__ = src.substr(0,src.indexOf("module/"));
-            test = result;
             for(k in result){
                 if(typeof(result[k].__class__) != "undefined"){
                     var cls = result[k];
@@ -187,7 +183,6 @@ var pico = (function(){
                         }
                     }
                     code += "return "+ k +"; })();";
-                    console.log(code);
                     eval(code);
                 }
                 else{
@@ -202,7 +197,7 @@ var pico = (function(){
                     eval(code);
                 }
             }
-            // result_handler(m);
+            result_handler(m);
         }
         pico.auth_get(url, params, callback);
     };
