@@ -1,0 +1,25 @@
+<html>
+<head>
+	<title>Pico Example</title>
+	<script type="text/javascript" src="/pico/pico.js"></script>
+	<script type="text/javascript">
+    	pico.load('helloworld');
+        pico.main = function() {
+            var displayMessage = function(message){
+                document.getElementById('message').innerHTML = message;
+            }
+            document.getElementById('hello').addEventListener('click', function(){
+                helloworld.hello(displayMessage);
+            });
+            document.getElementById('hi').addEventListener('click', function(){
+                helloworld.hi(document.getElementById('name').value, displayMessage);
+            });
+        }
+	</script>
+</head>
+<body>
+        <p id="message"></p>
+        <button type="button" id="hello">Hello</button></br>
+		<input type="text" value="Your name" size="20" id="name"/><button type="button" id="hi">Hi</button></br>
+</body>
+</html>
