@@ -3,6 +3,7 @@ if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
 var pico = (function(){
     var _username;
     var _password;
+    var inprogress_auth_gets = {};
     var pico = {};
     var scripts = document.getElementsByTagName("script");
     var src = scripts[scripts.length-1].src;
@@ -20,41 +21,83 @@ var pico = (function(){
             var f = function(username, password){
                 _username = username;
                 _password = hex_md5(password);
-                pico.auth_get(e.url, e.params);
+                var x = inprogress_auth_gets[e.params._key];
+                pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
+                delete inprogress_auth_gets[e.params._key];
             }
             pico.on_authentication_failure(e, f);
         }else if(e.exception.contains("nonce")){
             var td = e.exception.split(':')[1];
             pico.td += parseInt(td);
-            pico.auth_get(e.url, e.params);
+            var x = inprogress_auth_gets[e.params._key];
+            pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
         }
         else{
             pico.on_error(e);
         }
-    }
-    pico.get = function(url, params, callback)
+    };
+    pico.get_json = function(url, callback){
+        return pico.xhr(url, undefined, callback);
+    };
+    pico.xhr = function(url, data, callback)
     {
-        if(typeof(params) == "function" && typeof(callback) == "undefined"){
-            callback = params;
-            params = undefined;
+        if(typeof(data) == "function" && typeof(callback) == "undefined"){
+            callback = data;
+            data = undefined;
         }
-        if(typeof(params) == "undefined"){
-            params = {};
+        if(typeof(data) == "undefined"){
+            data = {};
         }
-        var callback_name = '';
-        if(pico.debug) callback_name = 'console.log';
+        if(typeof(callback) == "undefined"){
+            callback = function(data){console.log(data)};
+        }
+        if(typeof(data) == "object"){
+            data = urlencode(data);
+        }
+        data =  data.replace(/%20/g,"+");
+        xhr = new XMLHttpRequest();
+        xhr.open(data.length > 0 ? 'POST' : 'GET', url);
+        xhr.resonseType="text";
+        xhr.onload = function(e){
+            if(xhr.status == 200){
+                callback(JSON.parse(this.response), url);
+            }
+            else{
+                pico.exception(JSON.parse(this.response));
+            }
+        };
+        xhr.onerror = pico.exception;
+        xhr.send(data);
+        return xhr;
+    };
+    pico.get = function(url, data, callback)
+    {
+        if(document.getElementsByTagName("body").length > 0 && !url.contains('.js') && !url.contains('.css')){
+            return pico.xhr(url, data, callback);
+        }
+        if(typeof(data) == "function" && typeof(callback) == "undefined"){
+            callback = data;
+            data = undefined;
+        }
+        if(typeof(data) == "undefined"){
+            data = {};
+        }
+        if(typeof(callback) == "undefined"){
+            callback = function(data){console.log(data)};
+        }
+        if(typeof(data) == "object"){
+            data = urlencode(data);
+        }
+        if(data != undefined){
+            url += "&" + data;
+        }
         if(callback)
         {
-            callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
-            window[callback_name] = function(data){callback(data); /*delete window[callback_name]*/};
-            params['_callback'] = callback_name;
+            var callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
+            window[callback_name] = function(result){callback(result, url); /*delete window[callback_name]*/};
+            var params = {'_callback': callback_name};
+            url += '&' + urlencode(params);
         }
-        if(typeof(params) != "undefined") params['_picojs'] = 'true';
-        var parameters = [];
-        for(k in params){parameters.push(k + "=" + params[k])};
-        if(!url.contains('?')) url += '?';
-        else url += '&';
-        url +=  parameters.join('&');
         url = encodeURI(url);
         var elem;
         if(document.getElementsByTagName("body").length > 0)
@@ -66,7 +109,7 @@ var pico = (function(){
                 style.src = url;
                 style.rel = "stylesheet";
                 style.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
-                elem.appendChild(script);
+                elem.appendChild(style);
             }
             else{
                 var script = document.createElement('script');
@@ -85,29 +128,44 @@ var pico = (function(){
             }
             else
             {
-                if(callback_name.length > 0) callback_name + '()';
-                document.write('<script type="text/javascript" onload="'+callback_name+'"  src="' + url + '"></scr' + 'ipt>');
+                document.write('<script type="text/javascript" src="' + url + '"></scr' + 'ipt>');
             }
         
         }
     };
-    pico.auth_get = function(url, params, callback){
-        var params = params || {};
-        if(_username){
-            var now = new Date();
-            var time = Math.round((now.getTime() - now.getTimezoneOffset() * 60000) / 1000)
-            params['_username'] = _username;
-            params['_nonce'] = time + (pico.td || 0);
-            params['_key'] = hex_md5(_password + params['_nonce']);
-        }
-        pico.get(url, params, callback);
-    }
-    pico.call_function = function(object, function_name, args, callback, use_cache)
+    pico.call_function = function(object, function_name, args, callback, use_cache, use_auth)
     {
-        var params = {};
+        var request = pico.prepare_request(object, function_name, args, use_cache, use_auth);
+        var url = request.base_url;
+        var data = request.data;
+        if(use_auth){
+            var f = callback;
+            callback = function(response, url){delete inprogress_auth_gets[request.key]; f(response, url);};
+            var x = {}
+            x.object = object;
+            x.function_name = function_name;
+            x.args = args;
+            x.callback = callback;
+            x.use_cache = use_cache;
+            x.use_auth = use_auth;
+            inprogress_auth_gets[request.key] = x;
+        }
+        pico.get(url, data, callback);
+    };
+    pico.stream = function(object, function_name, args, callback, use_cache, use_auth)
+    {
+        var request = pico.prepare_request(object, function_name, args, use_cache, use_auth);
+        if(!callback) callback = function(response){console.debug(response)};
+        var stream = new EventSource(request.url);
+        stream.onmessage = function(e){callback(JSON.parse(e.data))};
+        return stream;
+    };
+    pico.prepare_request = function(object, function_name, args, use_cache, use_auth){
+        var data = {};
         for(k in args){
-            if(args[k] != undefined) params[k] = JSON.stringify(args[k]);
+            if(args[k] != undefined) data[k] = pico.json.dumps(args[k]);
         };
+        var params = {};
         if('__class__' in object){
             params['_module'] = object.__module__;
             params['_class'] = object.__class__;
@@ -119,47 +177,47 @@ var pico = (function(){
             var url = object.__url__;
         }
         params['_function'] = function_name;
+        if(use_auth){
+            var now = new Date();
+            var time = Math.round((now.getTime() - now.getTimezoneOffset() * 60000) / 1000)
+            params['_username'] = _username || '';
+            params['_nonce'] = time + (pico.td || 0);
+            params['_key'] = hex_md5(_password + params['_nonce']);
+        }
         url += 'call/';
-        if(!callback) callback = function(response){console.debug(response)};
-        var cache_key = url + JSON.stringify(params);
-        if(pico.cache.enabled && use_cache && pico.cache[cache_key])
-        {
-            if(pico.debug) console.log("Served from client side cache: " + url);
-            callback(pico.cache[cache_key]);
+        if(!(pico.cache.enabled && use_cache) && !url.contains('?')){
+            url += '?'
         }
-        else
-        {
-            if(pico.cache.enabled && use_cache)
-            {
-                var new_callback = function(callback, response){ 
-                    pico.cache[cache_key] = response; callback(response) 
-                };
-                callback = partial(new_callback, callback);
-                params['_usecache'] = 'true';
-            }
-            pico.auth_get(url, params, callback);
-        }
+        url += urlencode(params);
+        var request = {};
+        request.key = params['_key'];
+        request.base_url = url;
+        request.data = urlencode(data);;
+        request.url = encodeURI(request.base_url + '&' + request.data);
+        return request;
     };
     pico['import'] = function(){
         console.error("pico.import has been replaced with pico.load due to a reserved keyword conflict. You must update your code.")
     };
     pico.load = function(module, result_handler)
     {
-        var params = {};
-        var url = pico.url + 'module/';
-        params['_module'] = module;
-        var callback = function(result){
+        // var params = {};
+        // if(module.substr(0, 7) != 'http://'){
+        //     var url = pico.url + 'module/';
+        //     params['_module'] = module;
+        // }
+        // else var url = module;
+        var callback = function(result, url){
             var m = window;
-            var module_name_parts = module.split('.');
+            module_name_parts = module.split('.');
             for(var i in module_name_parts){
                 var s = module_name_parts[i];
                 m[s] = m[s] || {};
                 m = m[s];
             }
             m.__name__ = module;
-            var scripts = document.getElementsByTagName("script");
-            var src = scripts[scripts.length-1].src;
-            m.__url__ = src.substr(0,src.indexOf("module/"));
+            m.__url__ = url.substr(0,url.indexOf("call/"));
+            test = result;
             for(k in result){
                 if(typeof(result[k].__class__) != "undefined"){
                     var cls = result[k];
@@ -172,56 +230,91 @@ var pico = (function(){
                     code += "};";
                     for(var f in cls){
                         if(f[0] != "_"){
-                            var args = cls[f].args.map(function(x){return x[0]});
-                            var args_dict = '{' + cls[f].args.map(function(x){return '"' + x[0] + '":' + x[0]}).join(',') + '}';
-                            args.push('callback');
-                            var cache = cls[f].cache;
-                            code += k + ".prototype."+ f +" = function("+ args +"){";
-                            code += "    var args = "+ args_dict +";";
-                            code += "    pico.call_function(this, '"+ f +"', args, callback, "+ cache +");";
-                            code += "};";
+                            code += k + ".prototype."+ f + "=" + func_code(cls[f], f, 'this').replace(/"'this'"/g, 'this');
                         }
                     }
-                    code += "return "+ k +"; })();";
-                    eval(code);
+                    code += " return "+ k +"; })();";
                 }
                 else{
-                    var args = result[k].args.map(function(x){return x[0]});
-                    var args_dict = '{' + result[k].args.map(function(x){return '"' + x[0] + '":' + x[0]}).join(',') + '}';
-                    var cache = result[k].cache;
-                    args.push('callback');
-                    var code = "m." + k + "=function(" + args + "){";
-                    code += "var args="+ args_dict +";";
-                    code += 'pico.call_function('+module+', "'+k+'", args, callback, '+cache+');';
-                    code += '}';
-                    eval(code);
+                    var code = "m." + k + "=" + func_code(result[k], k, module);
                 }
+                eval(code);
             }
-            result_handler(m);
+            if(result_handler) result_handler(m);
         }
-        pico.auth_get(url, params, callback);
+        var obj = {'__name__': 'pico.server', '__url__': pico.url};
+        pico.call_function(obj, 'load', {'module_name': module}, callback, false)
     };
     pico.authenticate = function(username, password, callback){
         _username = username;
         _password = hex_md5(password);
         var obj = {'__name__': 'pico', '__url__': pico.url};
-        pico.call_function(obj, 'authenticate', {}, callback, false)
+        pico.call_function(obj, 'authenticate', {}, callback, false, true)
     };
     pico.unauthenticate = function(){
         _username = null;
         _password = null;
     };
-    var partial = function(func /*, 0..n args */) {
-        var args = Array.prototype.slice.call(arguments, 1);
-        return function() {
-            var allArguments = args.concat(Array.prototype.slice.call(arguments));
-            return func.apply(this, allArguments);
-        };
-    };
     pico.main = function(){console.log('Pico: DOMContentLoaded')};
+    pico.json = {};
+    pico.json.dumps = function(obj){
+        var extract = function(x){
+            if(x == null || x == undefined){
+                return x;
+            }else if(x.json != undefined){
+                return JSON.parse(x.json);
+            }else if(typeof(x)=="object" && x.length != undefined){
+                var d = [];
+                x.forEach(function(v,i){
+                    d[i] = extract(v);
+                });
+                return d;
+            }else if(typeof(x)=="object"){
+                var d = {};
+                keys(x).forEach(function(k){
+                    d[k] = extract(x[k]);
+                });
+                return d;
+            }
+            return x;
+        }
+        var d = extract(obj);
+        return JSON.stringify(d);
+    }
+    pico.json.loads = JSON.parse;
+    var func_code = function(f, name, module){
+        var args = f.args.map(function(x){return x[0]});
+        var args_dict = '{' + f.args.map(function(x){return '"' + x[0] + '":' + x[0]}).join(',') + '}';
+        var use_cache = f['cache'] || false;
+        var use_auth = f['protected'] || false;
+        args.push('callback');
+        code = "function(" + args + "){\n";
+        code += "var args="+ args_dict +";\n";
+        if(f['stream']){
+            code += 'return pico.stream('+module+', "'+name+'", args, callback, '+use_cache+', '+use_auth+'); \n';
+        }
+        else{
+            code += 'pico.call_function('+module+', "'+name+'", args, callback, '+use_cache+', '+use_auth+'); \n';
+        }
+        code += '}\n';
+        return code;
+    };
     return pico;
 })();
 document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
+
+var urlencode = function (params){
+    return keys(params).map(function(k){return k + "=" + params[k]}).join('&');
+}
+values = function (object){
+    var result = [];
+    for (var key in object)
+        result.push(object[key]);
+    return result;
+}
+keys = function(object){
+    return Object.keys(object);
+}
 
 /*
  * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
