@@ -28,6 +28,7 @@ class Response(object):
         self.status = '200 OK'
         self.headers = [('Content-type', 'text/plain')]
         self.type = "object"
+        self.cacheable = False
         self.json_dumpers = {}
         self.__dict__.update(kwds)
     
@@ -40,6 +41,8 @@ class Response(object):
     @property
     def output(self):
         print(self.type)
+        if hasattr(self.content, 'read'):
+            self.type = "file"
         if self.type == "plaintext":
             return [self.content,]
         if self.type == "file":
@@ -56,10 +59,12 @@ class Response(object):
             return s
 
 def main():
-    opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port="])
+    opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port=", "no-reload"])
     args = dict(opts_args[0])
     port = int(args.get('--port', args.get('-p', 8800)))
     multithreaded = '-m' in args
+    global RELOAD
+    RELOAD = RELOAD and ('--no-reload' not in args)
     host = '0.0.0.0' #'localhost'
     app = wsgi_app
     if multithreaded:
@@ -86,11 +91,11 @@ def is_authorised(f, authenticated_user):
         if (authenticated_user == None):
             return False
         else:
-            if f.protected_username == None and f.protected_group == None:
+            if f.protected_users == None and f.protected_groups == None:
                 return True
-            if f.protected_username and authenticated_user in f.protected_username:
+            if f.protected_users and authenticated_user in f.protected_users:
                 return True
-            if f.protected_group and set(USERS.get(authenticated_user)['groups']).intersection(f.protected_group):
+            if f.protected_groups and set(USERS.get(authenticated_user)['groups']).intersection(f.protected_groups):
                 return True
             return False
     else:
@@ -108,7 +113,9 @@ def call_function(module, function_name, parameters, authenticated_user=None):
         parameters.update({'pico_user': authenticated_user})
     results = f(**parameters)
     response = Response(content=results)
-    response.cacheable= (hasattr(f, 'cacheable') and f.cacheable)
+    if hasattr(f, 'cacheable') and f.cacheable:
+        response.cacheable = True
+        response.headers = [('Cache-Control', 'public, max-age=22222222')]
     if hasattr(f, 'stream') and f.stream and STREAMING:
         response.headers = [('Content-Type', 'text/event-stream')]
         response.type = "stream"
@@ -120,11 +127,14 @@ def call_method(module, class_name, method_name, parameters, init_args, authenti
         obj = getattr(module, class_name)(*init_args)
     except KeyError, e:
         raise Exception("No matching class availble. You asked for %s!"%(class_name))
-    return call_function(obj, method_name, parameters, authenticated_user)
+    r = call_function(obj, method_name, parameters, authenticated_user)
+    del obj
+    return r 
 
 def cache_key(params):
     params = dict(params)
-    del params['_callback']
+    if '_callback' in params:
+        del params['_callback']
     hashstring = hashlib.md5(str(params)).hexdigest()
     cache_key = "__".join([params.get('_module', ''), params.get('_class', ''), params.get('_function', ''), hashstring])
     return cache_key.replace('.', '_')
@@ -138,24 +148,31 @@ def call(params):
         if k.startswith('_') or k.startswith('pico_'):
             del parameters[k]
         else:
-            parameters[k] = json.loads(parameters[k].replace("'", '"'))
+            try:
+                parameters[k] = json.loads(parameters[k])
+            except:
+                try:
+                    parameters[k] = json.loads(parameters[k].replace("'", '"'))
+                except:
+                    parameters[k] = parameters[k]
     callback = params.get('_callback', None)
     init_args = json.loads(params.get('_init', '[]'))
     class_name = params.get('_class', None)
     usecache = json.loads(params.get('_usecache', 'false'))
     response = Response()
-    if function == 'authenticate' and module_name == 'pico':
-        response.content = authenticate(params)
-    if usecache and os.path.exists(CACHE_PATH):
+    if module_name == 'pico':
+        if function == 'authenticate':
+            response.content = authenticate(params)
+    elif usecache and os.path.exists(CACHE_PATH):
         try:
-            response.content = open(CACHE_PATH + cache_key(params)).read()
+            response.content = open(CACHE_PATH + cache_key(params))
             response.from_cache = True
             print("Serving from cache")
         except IOError:
             pass
-    if not response.content:
-        authenticated_user = authenticate(params)
+    elif not response.content:
         module = load_module(module_name)
+        authenticated_user = authenticate(params, module)
         # parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
         if class_name:
             init_args = map(lambda s: pico.from_json(s, getattr(module, "json_loaders", [])), init_args)
@@ -163,29 +180,28 @@ def call(params):
         else:
             response = call_function(module, function, parameters, authenticated_user)
         response.json_dumpers = getattr(module, "json_dumpers", {})
+        print(usecache, response.cacheable)
         if usecache and response.cacheable:
+            print("Saving to cache")
             try:
                 os.stat(CACHE_PATH)
             except:
                 os.mkdir(CACHE_PATH)
-            print("Saving to cache")
             f = open(CACHE_PATH + cache_key(params), 'w')
-            f.write(response.content)
+            out = response.content
+            if hasattr(out, 'read'):
+                out = out.read()
+                response.content.seek(0)
+            f.write(out)
             f.close()
     response.callback = callback
     return response
 
-def get_module(params):
-    module_name = params.get('_module', '')
-    picojs = json.loads(params.get('_picojs', 'false'))
-    callback = params.get('_callback', None)
-    authenticated_user = authenticate(params)
-    response = ''
+def load(module_name):
     module = load_module(module_name)
-    response = Response(content=module_dict(module, authenticated_user), callback=callback)
-    return response
+    return module_dict(module)
 
-def module_dict(module, authenticated_user=None):
+def module_dict(module):
     module_dict = {}
     classes = inspect.getmembers(module, lambda x: inspect.isclass(x) and x.__module__ == module.__name__ and issubclass(x, pico.Pico))
     for class_name, cls in classes:
@@ -193,22 +209,22 @@ def module_dict(module, authenticated_user=None):
         for m in inspect.getmembers(cls, inspect.ismethod):
             f = m[1]
             if not (m[0].startswith('_')  or hasattr(f, 'private')) or m[0] == '__init__':
-                cachable = ((hasattr(f, 'cacheable') and f.cacheable))
-                a = inspect.getargspec(f)
-                args = list(reversed(map(None, reversed(a.args), reversed(a.defaults or [None]))))
-                args = filter(lambda x: x[0] and not (x[0].startswith('pico_') or x[0] == 'self'), args)
-                class_dict[m[0]] = {'args': args, 'cache': cachable, 'doc': f.__doc__}
+                class_dict[m[0]] = func_dict(f)
         module_dict[class_name] = class_dict
     for m in inspect.getmembers(module, lambda x: inspect.isfunction(x) and x.__module__ == module.__name__):
         f = m[1]
         if not (m[0].startswith('_') or hasattr(f, 'private')):
-            cachable = ((hasattr(f, 'cacheable') and f.cacheable))
-            a = inspect.getargspec(f)
-            args = list(reversed(map(None, reversed(a.args), reversed(a.defaults or [None]))))
-            print(args)
-            args = filter(lambda x: x[0] and not x[0].startswith('pico_'), args)
-            module_dict[m[0]] = {'args': args, 'cache': cachable, 'doc': f.__doc__}
+            module_dict[m[0]] = func_dict(f)
     return module_dict
+
+def func_dict(f):
+    cachable = ((hasattr(f, 'cacheable') and f.cacheable))
+    stream = ((hasattr(f, 'stream') and f.stream))
+    protected = ((hasattr(f, 'protected') and f.protected))
+    a = inspect.getargspec(f)
+    args = list(reversed(map(None, reversed(a.args), reversed(a.defaults or [None]))))
+    args = filter(lambda x: x[0] and not (x[0].startswith('pico_') or x[0] == 'self'), args)
+    return {'args': args, 'cache': cachable, 'stream': stream, 'protected': protected, 'doc': f.__doc__}
 
 def error(params):
     return Response(content="Error 404. Bad URl", type="plaintext")
@@ -217,6 +233,8 @@ def pico_js(params):
     return Response(content=open(path + 'client.js'), type="file")
 
 def load_module(module_name):
+    if module_name in ['pico', 'pico.server']:
+        return sys.modules[module_name]
     modules_path = './'
     if module_name in sys.modules and RELOAD: 
         del sys.modules[module_name]
@@ -226,7 +244,7 @@ def load_module(module_name):
     m = sys.modules[module_name]
     if RELOAD:
         m = reload(m)
-    print("Module %s loaded"%module_name)
+        print("Module %s loaded"%module_name)
     if not (hasattr(m, 'pico') and m.pico.magic == pico.magic):
         raise ImportError('This module has not imported pico and therefore is not picoable!')
     return m
@@ -245,6 +263,7 @@ def file_handler(path):
         response.headers = [
             ("Content-type", mimetype[0]),
             ("Content-length", str(size)),
+            ("Cache-Control", 'public, max-age=22222222'),
         ]
         response.content = open(file_path)
         response.type = "file"
@@ -259,7 +278,13 @@ def _hash(s):
     m.update(s)
     return m.hexdigest()
     
-def authenticate(params):
+def authenticate(params, module=None):
+    users = USERS
+    if users == {} or users == None:
+        if module and hasattr(module, 'PICO_USERS'):
+            users = module.PICO_USERS
+        else:
+            return None
     username = params.get('_username', None)
     if username:
         key = params.get('_key', '')
@@ -267,7 +292,8 @@ def authenticate(params):
         dt =  time.time() - int(nonce)
         if dt > 60:
             raise Exception("Bad nonce. The time difference is: %s"%dt)
-        password = USERS.get(username, {}).get('password', None)
+        password = users.get(username, {}).get('password', None)
+        # print(password, str(nonce), _hash(password + str(nonce)))
         if password and key == _hash(password + str(nonce)):
             print("authenticated_user: %s"%username)
         else:
@@ -278,43 +304,56 @@ def authenticate(params):
 
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
-    try:
-      request_body_size = int(environ.get('CONTENT_LENGTH', 0))
-    except (ValueError):
-      request_body_size = 0
-    params = environ['wsgi.input'].read(request_body_size)
-    params = environ['QUERY_STRING'] + '&' + params
-    params = cgi.parse_qs(params)
-    for k in params:
-        params[k] = params[k][0]
-    print('------')
-    print(params)
-    picojs = json.loads(params.get('_picojs', 'false'))
-    try:
-        path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
-        if BASE_PATH: path = path.split(BASE_PATH)[1]
-        print(path)
-        handler = url_handlers.get(path.replace('/pico/', '/'), None)
-        if handler:
-            response = handler(params)
-        else:
-            response = file_handler(path)
-    except Exception, e:
+    if environ['REQUEST_METHOD'] == 'OPTIONS':
+        # This is to hanle the preflight request for CORS. 
+        # See https://developer.mozilla.org/en/http_access_control
         response = Response()
-        full_tb = traceback.extract_tb(sys.exc_info()[2])
-        tb_str = ''
-        for tb in full_tb:
-            tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
-        report = {}
-        report['exception'] = str(e)
-        report['traceback'] = tb_str
-        report['url'] = path.replace('/pico/', '/')
-        report['params'] = params
-        response.content = report
-        if picojs:
-            response.callback = 'pico.exception'
-        else:
-            response.status = '500 ' + str(e)
+        response.status = "200 OK"
+    else:
+        try:
+          request_body_size = int(environ.get('CONTENT_LENGTH', 0))
+        except (ValueError):
+          request_body_size = 0
+        post_params = environ['wsgi.input'].read(request_body_size)
+        get_params = environ['QUERY_STRING'] 
+        if get_params == '' and '/call/' in environ['PATH_INFO']:
+            path = environ['PATH_INFO'].split('/')
+            environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
+            get_params = path[-1]
+        params =  post_params + '&' + get_params
+        params = cgi.parse_qs(params)
+        for k in params:
+            params[k] = params[k][0]
+        print('------')
+        # print(params)
+        picojs = json.loads(params.get('_picojs', 'false'))
+        try:
+            path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
+            if BASE_PATH: path = path.split(BASE_PATH)[1]
+            print(path)
+            handler = url_handlers.get(path.replace('/pico/', '/'), None)
+            if handler:
+                response = handler(params)
+            else:
+                response = file_handler(path)
+        except Exception, e:
+            response = Response()
+            full_tb = traceback.extract_tb(sys.exc_info()[2])
+            tb_str = ''
+            for tb in full_tb:
+                tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
+            report = {}
+            report['exception'] = str(e)
+            report['traceback'] = tb_str
+            report['url'] = path.replace('/pico/', '/')
+            report['params'] = dict([(k, params[k][:100] + ('...' if len(params[k]) > 100 else '')) for k in params])
+            response.content = report
+            if picojs:
+                response.callback = 'pico.exception'
+            else:
+                response.status = '500 ' + str(e)
+    response.headers.append(('Access-Control-Allow-Origin', '*'))
+    response.headers.append(('Access-Control-Allow-Headers', 'Content-Type'))
     start_response(response.status, response.headers)
     return response.output
 
@@ -323,7 +362,6 @@ CACHE_PATH = './cache/'
 BASE_PATH = ''
 url_handlers = {
     '/call/': call,
-    '/module/': get_module,
     '/authenticate/': authenticate,
     '/pico.js': pico_js,
     '/client.js': pico_js
