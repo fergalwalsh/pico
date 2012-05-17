@@ -19,8 +19,8 @@ def private(func):
 def protected(users=None, groups=None):
     def decorator(func):
         func.protected = True
-        func.protected_username = users
-        func.protected_group = groups
+        func.protected_users = users
+        func.protected_groups = groups
         return func
     if callable(users):
         f = users
@@ -28,7 +28,7 @@ def protected(users=None, groups=None):
         groups = None
         return decorator(f)
     if users and not hasattr(users, '__iter__'):
-        users = [users]
+        users = [groups]
     if groups and not hasattr(groups, '__iter__'):
         groups = [groups]
     return decorator
@@ -40,6 +40,10 @@ class Pico(object):
     
     
 
+class JSONString(str):
+    def __init__(self, s):
+        pass
+
 def convert_keys(obj):
     if type(obj) == dict: # convert non string keys to strings
         for k in obj:
@@ -50,6 +54,8 @@ def convert_keys(obj):
 
 
 def to_json(obj, _json_dumpers = {}):
+    if isinstance(obj, JSONString):
+        return obj
     class Encoder(json.JSONEncoder):
         def default(self, obj):
             if type(obj) in _json_dumpers:
@@ -96,3 +102,4 @@ lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
 ]
 
 magic = 'hjksdfjgg;jfgfdggldfgj' # used in the check to see if a module has explicitly imported Pico to make it Picoable
+STREAMING = False
