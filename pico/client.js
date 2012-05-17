@@ -82,13 +82,10 @@ var pico = (function(){
         if(typeof(data) == "undefined"){
             data = {};
         }
-        if(typeof(callback) == "undefined"){
-            callback = function(data){console.log(data)};
-        }
         if(typeof(data) == "object"){
             data = urlencode(data);
         }
-        if(data != undefined){
+        if(data){
             url += "&" + data;
         }
         if(callback)
