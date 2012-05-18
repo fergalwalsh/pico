@@ -16,7 +16,6 @@ var pico = (function(){
     pico.on_error = function(e){console.error(e)};
     pico.on_authentication_failure = function(e, f){console.error("authentication_failure: " + e.exception);};
     pico.exception = function(e){
-        e.url = scripts[scripts.length-1].src.split(e.url)[0] + e.url;
         if(e.exception.contains("password") || e.exception.contains("not authorised")){
             var f = function(username, password){
                 _username = username;
