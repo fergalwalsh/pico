@@ -63,7 +63,7 @@ def _call_function(module, function, args, stream=False):
         args[k] = pico.to_json(args[k])
     args['_function'] = function
     args['_module'] = module
-    return get(url + 'call/', args)
+    return get(url + 'call/', args, stream)
 
 def authenticate(username, password):
     """ 
