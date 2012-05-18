@@ -85,6 +85,7 @@ var pico = (function(){
         if(typeof(data) == "object"){
             data = urlencode(data);
         }
+        url = encodeURI(url);
         if(data){
             url += "&" + data;
         }
@@ -95,7 +96,6 @@ var pico = (function(){
             var params = {'_callback': callback_name};
             url += '&' + urlencode(params);
         }
-        url = encodeURI(url);
         var elem;
         if(document.getElementsByTagName("body").length > 0)
         {
@@ -301,7 +301,7 @@ var pico = (function(){
 document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
 
 var urlencode = function (params){
-    return keys(params).map(function(k){return k + "=" + params[k]}).join('&');
+    return keys(params).map(function(k){return k + "=" +  encodeURIComponent(params[k])}).join('&');
 }
 values = function (object){
     var result = [];
