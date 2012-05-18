@@ -1,8 +1,0 @@
-Pico is a very small web application framework for Python.
-
-In a single (small) file it is a server, a Python libary and a Javascript library!
-
-Pico allows you to write Python modules, classes and functions that can be imported and called directly from Javascript.
-
-Pico is NOT a Python to Javascript compiler - Pico IS a bridge between server side Python and client side Javascript.
-
