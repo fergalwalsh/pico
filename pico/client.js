@@ -189,7 +189,7 @@ var pico = (function(){
         request.key = params['_key'];
         request.base_url = url;
         request.data = urlencode(data);;
-        request.url = encodeURI(request.base_url + '&' + request.data);
+        request.url = encodeURI(request.base_url) + '&' + request.data;
         return request;
     };
     pico['import'] = function(){
