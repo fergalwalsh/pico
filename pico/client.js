@@ -54,7 +54,7 @@ var pico = (function(){
             data = urlencode(data);
         }
         data =  data.replace(/%20/g,"+");
-        xhr = new XMLHttpRequest();
+        var xhr = new XMLHttpRequest();
         xhr.open(data.length > 0 ? 'POST' : 'GET', url);
         xhr.resonseType="text";
         xhr.onload = function(e){
