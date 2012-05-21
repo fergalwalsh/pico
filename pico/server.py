@@ -233,8 +233,13 @@ def pico_js(params):
     return Response(content=open(path + 'client.js'), type="file")
 
 def load_module(module_name):
-    if module_name in ['pico', 'pico.server']:
-        return sys.modules[module_name]
+    if module_name == 'pico':
+        return sys.modules['pico']
+    if module_name == 'pico.server':
+        if module_name in sys.modules:
+            return sys.modules[module_name]
+        else:
+            return sys.modules[__name__]
     modules_path = './'
     if module_name in sys.modules and RELOAD: 
         del sys.modules[module_name]
@@ -320,8 +325,9 @@ def wsgi_app(environ, start_response):
             path = environ['PATH_INFO'].split('/')
             environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
             get_params = path[-1]
-        params =  post_params + '&' + get_params
-        params = cgi.parse_qs(params)
+        params =  {}
+        params.update(cgi.parse_qs(get_params))
+        params.update(cgi.parse_qs(post_params))
         for k in params:
             params[k] = params[k][0]
         print('------')
@@ -347,6 +353,7 @@ def wsgi_app(environ, start_response):
             report['traceback'] = tb_str
             report['url'] = path.replace('/pico/', '/')
             report['params'] = dict([(k, params[k][:100] + ('...' if len(params[k]) > 100 else '')) for k in params])
+            print(json.dumps(report, indent=1))
             response.content = report
             if picojs:
                 response.callback = 'pico.exception'
