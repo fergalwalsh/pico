@@ -261,6 +261,12 @@ def file_handler(path):
         m = re.match(url, path)
         if m:
             file_path = directory + ''.join(m.groups())
+
+    # if the path does not point to a valid file, try default file 
+    file_exists = os.path.isfile(file_path)
+    if not file_exists:
+        file_path = os.path.join(file_path, DEFAULT)
+
     print("Serving: " + file_path)
     if os.path.isfile(file_path):
         size = os.path.getsize(file_path)
@@ -376,6 +382,7 @@ url_handlers = {
 STATIC_URL_MAP = [
 ('^/(.*)$', './'),
 ]
+DEFAULT = 'index.html'
 RELOAD = True
 STREAMING = False
 USERS = {}
