@@ -1,20 +1,135 @@
 String.prototype.contains = function (sub){return(this.indexOf(sub)!=-1);};
 if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
+
 var pico = (function(){
-    var _username;
-    var _password;
-    var inprogress_auth_gets = {};
-    var pico = {};
-    var scripts = document.getElementsByTagName("script");
-    var src = scripts[scripts.length-1].src;
+
+    function urlencode (params){
+         return keys(params).map(function(k){return k + "=" +  encodeURIComponent(params[k])}).join('&');
+    }
+
+    function values (object){
+        var result = [];
+        for (var key in object)
+            result.push(object[key]);
+        return result;
+    }
+
+    function keys (object){
+        return Object.keys(object);
+    }
+
+    /**
+     * Creates a namespace from a point-seperated string.
+     */    
+    function create_namespace(ns, root) {
+        var m = root || window,
+            parts = ns.split('.'),
+            level;
+
+        for(var i = 0, l = parts.length; i < l; i++) {
+            level = parts[i];
+            m = (m[level] = m[level] || {});
+        }
+        return m;
+    }
+
+    function create_function_proxy(definition, function_name, module) {
+        var args = definition.args.map(function(x){return x[0];}),
+            use_cache = !!definition.cache,
+            use_auth = !!definition.use_auth;
+
+        var proxy = function() {
+            var args_dict = {},
+                callback;
+
+            for(var i = 0, l = args.length; i < l; i++) {
+                args_dict[args[i]] = arguments[i];
+            }
+            
+            if(arguments.length === args.length + 1 && 
+               typeof arguments[arguments.length - 1] === 'function') {
+                   callback = arguments[arguments.length - 1];
+            }
+            
+            return pico[definition.stream ? 'stream' : 'call_function'](module, function_name, args_dict, callback, use_cache, use_auth);
+        };
+
+
+        // generate doc string
+        proxy.__doc__ =  "function(" + args.join(', ') + ', callback)';
+        if(definition.doc) {
+            proxy.__doc__ =  [proxy.__doc__, definition.doc].join('\n');
+        }
+
+        proxy.toString = function() {
+            return this.__doc__;
+        };
+
+        return proxy;
+    }
+
+    function create_class_proxy(definition, class_name, module_name) {
+        var args = definition.__init__.args.map(function(x){return x[0];}),
+            Constr = function() {
+                this.__args__ = [].slice.call(arguments);
+                this.__module__ = module_name;
+                this.__class__ = class_name;
+            };
+
+
+        for(var func_name in definition) {
+            if(func_name.charAt(0) !== '_') {
+                (function(func_name, definition) {
+                    var proxy_func;
+
+                    Constr.prototype[func_name] = function() {
+                        if(!proxy_func) {
+                            proxy_func = create_function_proxy(definition, func_name, this);
+                        }
+                        return proxy_func.apply(this, arguments); 
+                    };
+                }(func_name, definition[func_name]));
+            }
+        }
+
+        // generate doc string
+        Constr.__doc__ =  "function(" + args.join(', ') + ', callback)';
+        if(definition.doc) {
+            Constr.__doc__ =  [Constr.__doc__, definition.doc].join('\n');
+        }
+
+        Constr.toString = function() {
+            return this.__doc__;
+        };
+
+        return Constr;
+        
+    }
+
+
+    var _username, 
+        _password,
+        inprogress_auth_gets = {},
+        pico = {},
+        scripts = document.getElementsByTagName("script"),
+        src = scripts[scripts.length-1].src;
+
     pico.url = src.substr(0,src.indexOf("client.js")) || src.substr(0,src.indexOf("pico.js"));
     pico.urls = [];
-    pico.cache = {};
-    pico.cache.enabled = true;
+    pico.cache = {
+        enabled: true
+    };
     pico.debug = false;
     pico.td = 0;
-    pico.on_error = function(e){console.error(e)};
-    pico.on_authentication_failure = function(e, f){console.error("authentication_failure: " + e.exception);};
+
+    pico.on_error = function(e){
+        console.error(e);
+    };
+
+    pico.on_authentication_failure = function(e, f){
+        console.error("authentication_failure: " + e.exception);
+    };
+
     pico.exception = function(e){
         if(e.exception.contains("password") || e.exception.contains("not authorised")){
             var f = function(username, password){
@@ -35,9 +150,11 @@ var pico = (function(){
             pico.on_error(e);
         }
     };
+
     pico.get_json = function(url, callback){
         return pico.xhr(url, undefined, callback);
     };
+
     pico.xhr = function(url, data, callback)
     {
         if(typeof(data) == "function" && typeof(callback) == "undefined"){
@@ -69,6 +186,7 @@ var pico = (function(){
         xhr.send(data);
         return xhr;
     };
+
     pico.get = function(url, data, callback)
     {
         if(document.getElementsByTagName("body").length > 0 && !url.contains('.js') && !url.contains('.css')){
@@ -129,6 +247,7 @@ var pico = (function(){
         
         }
     };
+
     pico.call_function = function(object, function_name, args, callback, use_cache, use_auth)
     {
         var request = pico.prepare_request(object, function_name, args, use_cache, use_auth);
@@ -148,6 +267,7 @@ var pico = (function(){
         }
         pico.get(url, data, callback);
     };
+
     pico.stream = function(object, function_name, args, callback, use_cache, use_auth)
     {
         var request = pico.prepare_request(object, function_name, args, use_cache, use_auth);
@@ -167,6 +287,7 @@ var pico = (function(){
         stream.open();
         return stream;
     };
+
     pico.prepare_request = function(object, function_name, args, use_cache, use_auth){
         var data = {};
         for(k in args){
@@ -203,9 +324,11 @@ var pico = (function(){
         request.url = encodeURI(request.base_url) + '&' + request.data;
         return request;
     };
+
     pico['import'] = function(){
-        console.error("pico.import has been replaced with pico.load due to a reserved keyword conflict. You must update your code.")
+        console.error("pico.import has been replaced with pico.load due to a reserved keyword conflict. You must update your code.");
     };
+
     pico.load = function(module, result_handler)
     {
         // var params = {};
@@ -215,113 +338,59 @@ var pico = (function(){
         // }
         // else var url = module;
         var callback = function(result, url){
-            var m = window;
-            module_name_parts = module.split('.');
-            for(var i in module_name_parts){
-                var s = module_name_parts[i];
-                m[s] = m[s] || {};
-                m = m[s];
-            }
-            m.__name__ = module;
-            m.__url__ = url.substr(0,url.indexOf("call/"));
+            var ns = create_namespace(module);
+ 
+            ns.__name__ = module;
+            ns.__url__ = url.substr(0,url.indexOf("call/"));
+
+            // debug
             test = result;
-            for(k in result){
-                if(typeof(result[k].__class__) != "undefined"){
-                    var cls = result[k];
-                    var args = cls['__init__'].args.map(function(x){return x[0]});
-                    var code = "m."+ k +" = (function(){";
-                    code += "var "+ k + " = function("+ args +") {";
-                    code += "    this.__args__ = Array.prototype.slice.call(arguments);";
-                    code += "   this.__module__ = '"+ module +"';";
-                    code += "   this.__class__ =  '"+ k +"';";
-                    code += "};";
-                    for(var f in cls){
-                        if(f[0] != "_"){
-                            code += k + ".prototype."+ f + "=" + func_code(cls[f], f, 'this').replace(/"'this'"/g, 'this');
-                        }
-                    }
-                    code += " return "+ k +"; })();";
+
+            for(var func_name in result){
+                if(typeof(result[func_name].__class__) != "undefined"){ // we have a class
+                    ns[func_name] = create_class_proxy(result[func_name], func_name, module);
                 }
                 else{
-                    var code = "m." + k + "=" + func_code(result[k], k, module);
+                    ns[func_name] = create_function_proxy(result[func_name], func_name, ns);
                 }
-                eval(code);
             }
-            if(result_handler) result_handler(m);
-        }
+            if(result_handler) {
+                result_handler(ns);
+            }
+        };
         var obj = {'__name__': 'pico.server', '__url__': pico.url};
-        pico.call_function(obj, 'load', {'module_name': module}, callback, false)
+        pico.call_function(obj, 'load', {'module_name': module}, callback, false);
     };
+
     pico.authenticate = function(username, password, callback){
         _username = username;
         _password = hex_md5(password);
         var obj = {'__name__': 'pico', '__url__': pico.url};
         pico.call_function(obj, 'authenticate', {}, callback, false, true)
     };
+
     pico.unauthenticate = function(){
         _username = null;
         _password = null;
     };
+
     pico.main = function(){console.log('Pico: DOMContentLoaded')};
-    pico.json = {};
-    pico.json.dumps = function(obj){
-        var extract = function(x){
-            if(x == null || x == undefined){
-                return x;
-            }else if(x.json != undefined){
-                return JSON.parse(x.json);
-            }else if(typeof(x)=="object" && x.length != undefined){
-                var d = [];
-                x.forEach(function(v,i){
-                    d[i] = extract(v);
-                });
-                return d;
-            }else if(typeof(x)=="object"){
-                var d = {};
-                keys(x).forEach(function(k){
-                    d[k] = extract(x[k]);
-                });
-                return d;
-            }
-            return x;
-        }
-        var d = extract(obj);
-        return JSON.stringify(d);
-    }
-    pico.json.loads = JSON.parse;
-    var func_code = function(f, name, module){
-        var args = f.args.map(function(x){return x[0]});
-        var args_dict = '{' + f.args.map(function(x){return '"' + x[0] + '":' + x[0]}).join(',') + '}';
-        var use_cache = f['cache'] || false;
-        var use_auth = f['protected'] || false;
-        args.push('callback');
-        code = "function(" + args + "){\n";
-        code += "var args="+ args_dict +";\n";
-        if(f['stream']){
-            code += 'return pico.stream('+module+', "'+name+'", args, callback, '+use_cache+', '+use_auth+'); \n';
-        }
-        else{
-            code += 'pico.call_function('+module+', "'+name+'", args, callback, '+use_cache+', '+use_auth+'); \n';
-        }
-        code += '}\n';
-        return code;
+
+    pico.json = {
+        dumps: function(obj){
+            return JSON.stringify(obj, function(k, v) {
+                return typeof v === 'object' && typeof v.json === 'string' ? JSON.parse(v.json) : v;   
+            });
+        },
+        loads: JSON.parse
     };
+
     return pico;
-})();
+}());
+
 document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
 
-var urlencode = function (params){
-    return keys(params).map(function(k){return k + "=" +  encodeURIComponent(params[k])}).join('&');
-}
-values = function (object){
-    var result = [];
-    for (var key in object)
-        result.push(object[key]);
-    return result;
-}
-keys = function(object){
-    return Object.keys(object);
-}
+
 
 /*
  * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
