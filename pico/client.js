@@ -152,8 +152,19 @@ var pico = (function(){
     {
         var request = pico.prepare_request(object, function_name, args, use_cache, use_auth);
         if(!callback) callback = function(response){console.debug(response)};
-        var stream = new EventSource(request.url);
-        stream.onmessage = function(e){callback(JSON.parse(e.data))};
+        var stream = {};
+        stream.open = function(){
+            stream.socket = new EventSource(request.url);
+            stream.socket.onmessage = function(e){callback(JSON.parse(e.data))};
+        };
+        stream.close = function(){
+            stream.socket.close();
+        };
+        stream.status = function(){
+            var states = ["Connecting", "Open", "Closed"]
+            return states[stream.socket.readyState];
+        };
+        stream.open();
         return stream;
     };
     pico.prepare_request = function(object, function_name, args, use_cache, use_auth){
