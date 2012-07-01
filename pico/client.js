@@ -370,7 +370,9 @@ var pico = (function(){
         }
         var callback = function(result, url){
             var ns = create_namespace(module);
- 
+            for(var k in ns){
+                delete ns[k];
+            }
             ns.__name__ = module;
             ns.__url__ = url.substr(0,url.indexOf("module/"));
             ns.__doc__ = result['__doc__']
