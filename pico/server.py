@@ -368,7 +368,15 @@ def wsgi_app(environ, start_response):
         try:
             path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
             if BASE_PATH: path = path.split(BASE_PATH)[1]
-            handler = url_handlers.get(path.replace('/pico/', '/'), None)
+            path = path.replace('/pico/', '/')
+            if '/module/' in path:
+                module_name = path.split('/')[2]
+                path = '/call/'
+                params['_module'] = 'pico.server'
+                params['_function'] = 'load'
+                params['module_name'] = '"%s"'%module_name
+            log(path)
+            handler = url_handlers.get(path, None)
             if handler:
                 response = handler(params)
             else:
