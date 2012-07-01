@@ -36,7 +36,7 @@ var pico = (function(){
     function create_function_proxy(definition, function_name, module) {
         var args = definition.args.map(function(x){return x[0];}),
             use_cache = !!definition.cache,
-            use_auth = !!definition.use_auth;
+            use_auth = !!definition["protected"];
 
         var proxy = function() {
             var args_dict = {},
