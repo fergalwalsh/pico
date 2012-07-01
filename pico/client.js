@@ -398,6 +398,14 @@ var pico = (function(){
         };
         return pico.get(url, undefined, callback)
     };
+
+    pico.load_as = function(module, as_name, result_handler){
+        return pico.load(module, function(m){
+            window[as_name] = m;
+            if(result_handler){
+                result_handler(m);
+            }
+        });
     };
 
     pico.authenticate = function(username, password, callback){
