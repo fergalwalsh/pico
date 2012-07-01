@@ -203,28 +203,46 @@ def load(module_name):
 
 def module_dict(module):
     module_dict = {}
-    classes = inspect.getmembers(module, lambda x: inspect.isclass(x) and x.__module__ == module.__name__ and issubclass(x, pico.Pico))
-    for class_name, cls in classes:
-        class_dict = {'__class__': class_name}
-        for m in inspect.getmembers(cls, inspect.ismethod):
-            f = m[1]
-            if not (m[0].startswith('_')  or hasattr(f, 'private')) or m[0] == '__init__':
                 class_dict[m[0]] = func_dict(f)
-        module_dict[class_name] = class_dict
-    for m in inspect.getmembers(module, lambda x: inspect.isfunction(x) and x.__module__ == module.__name__):
         f = m[1]
         if not (m[0].startswith('_') or hasattr(f, 'private')):
             module_dict[m[0]] = func_dict(f)
+    pico_exports = getattr(module, 'pico_exports', None)
+        (name, f) = x
+        and not hasattr(f, 'private')
+
+        (name, f) = x
+        return inspect.isclass(f) \
+        and (not pico_exports or name in pico_exports) \
+        and not hasattr(f, 'private')
+    class_defs = dict((name, class_dict(cls)) for (name, cls) in filter(class_filter, members))
+    function_defs = dict((name, func_dict(f)) for (name, f) in filter(function_filter, members))
+    module_dict.update(class_defs)
+    module_dict.update(function_defs)
+    module_dict['__doc__'] = module.__doc__
     return module_dict
 
+def class_dict(cls):
+    def method_filter(x):
+        (name, f) = x
+        return inspect.ismethod(f) \
+        and (not name.startswith('_') or name == '__init__') \
+        and not hasattr(f, 'private')
+    class_dict = {'__class__': cls.__name__}
+    methods = filter(method_filter, inspect.getmembers(cls))
+    class_dict.update(dict((name, func_dict(f)) for (name, f) in methods))
+    return class_dict
 def func_dict(f):
-    cachable = ((hasattr(f, 'cacheable') and f.cacheable))
-    stream = ((hasattr(f, 'stream') and f.stream))
     protected = ((hasattr(f, 'protected') and f.protected))
+    func_dict = {}
+    func_dict['cache'] = ((hasattr(f, 'cacheable') and f.cacheable))
+    func_dict['stream'] = ((hasattr(f, 'stream') and f.stream))
+    func_dict['protected'] = ((hasattr(f, 'protected') and f.protected))
     a = inspect.getargspec(f)
     args = list(reversed(map(None, reversed(a.args), reversed(a.defaults or [None]))))
-    args = filter(lambda x: x[0] and not (x[0].startswith('pico_') or x[0] == 'self'), args)
-    return {'args': args, 'cache': cachable, 'stream': stream, 'protected': protected, 'doc': f.__doc__}
+    func_dict['args'] = filter(lambda x: x[0] and not (x[0].startswith('pico_') or x[0] == 'self'), args)
+    func_dict['doc'] = f.__doc__
+    return func_dict
 
 def error(params):
     return Response(content="Error 404. Bad URl", type="plaintext")
