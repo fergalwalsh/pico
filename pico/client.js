@@ -219,7 +219,8 @@ var pico = (function(){
             var callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
             window[callback_name] = function(result){callback(result, url); /*delete window[callback_name]*/};
             var params = {'_callback': callback_name};
-            url += '&' + urlencode(params);
+            url += url.indexOf('?') > -1 ? '&' : '?'
+            url += urlencode(params);
         }
         var elem;
         if(document.getElementsByTagName("body").length > 0)
