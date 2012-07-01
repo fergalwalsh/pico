@@ -69,11 +69,14 @@ var pico = (function(){
     }
 
     function create_class_proxy(definition, class_name, module_name) {
+        var doc = definition['__doc__']
+        delete definition['__doc__'];
         var args = definition.__init__.args.map(function(x){return x[0];}),
             Constr = function() {
                 this.__args__ = [].slice.call(arguments);
                 this.__module__ = module_name;
                 this.__class__ = class_name;
+                this.__doc__ = doc;
             };
 
 
@@ -417,6 +420,10 @@ var pico = (function(){
             });
         },
         loads: JSON.parse
+    };
+
+    pico.help = function(f){ 
+        return f.__doc__;
     };
 
     return pico;
