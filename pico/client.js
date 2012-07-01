@@ -173,7 +173,7 @@ var pico = (function(){
             data = {};
         }
         if(typeof(callback) == "undefined"){
-            callback = function(data){console.log(data)};
+            callback = pico.log;
         }
         if(typeof(data) == "object"){
             data = urlencode(data);
@@ -433,6 +433,17 @@ var pico = (function(){
 
     pico.help = function(f){ 
         return f.__doc__;
+    };
+
+    pico.reload = function(module, callback){
+        return pico.load(module.__url__ + 'module/' + module.__name__, function(m){
+            module=m;
+            if(callback) callback(m);
+        });
+    };
+
+    pico.log = function(arg){
+        console.log(arg);
     };
 
     return pico;
