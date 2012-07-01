@@ -242,7 +242,7 @@ def module_dict(module):
     def function_filter(x):
         (name, f) = x
         return inspect.isfunction(f) \
-        and (not pico_exports or name in pico_exports) \
+        and (pico_exports == None or name in pico_exports) \
         and f.__module__ == module.__name__ \
         and not name.startswith('_') \
         and not hasattr(f, 'private')
