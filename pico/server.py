@@ -1,5 +1,5 @@
 from wsgiref.util import setup_testing_defaults
-from wsgiref.simple_server import make_server
+import wsgiref.simple_server
 
 import sys
 import cgi
@@ -18,10 +18,12 @@ import time
 
 import wsgiref
 import SocketServer
+import threading
 
 import pico
 
 path = (os.path.dirname(__file__) or '.') + '/'
+_server_process = None
 
 class Response(object):
     def __init__(self, **kwds):
@@ -66,23 +68,55 @@ def main():
     global RELOAD
     RELOAD = RELOAD and ('--no-reload' not in args)
     host = '0.0.0.0' #'localhost'
-    app = wsgi_app
-    if multithreaded:
-        class ThreadedTCPServer(SocketServer.ForkingMixIn, wsgiref.simple_server.WSGIServer):
-            pass
-        server = ThreadedTCPServer((host, port), wsgiref.simple_server.WSGIRequestHandler)
-        server.set_app(app)
-        server_type = 'multiple threads'
-    else:
-        server = make_server(host, port, app)
-        server_type = 'a single thread'
+    server = make_server(host, port, multithreaded)
     print("Serving on http://localhost:%s/"%port)
-    print("Using %s."%server_type)
+    print("Using %s."%('multiple threads' if multithreaded else 'a single thread'))
     print("URL map: ")
     print('\t' + '\n\t'.join(["%s : %s "%(url, path) for url, path in STATIC_URL_MAP]))
     print("Hit CTRL-C to end")
     server.serve_forever()
-    
+
+
+def make_server(host='0.0.0.0', port=8800, multithreaded=False):
+    if multithreaded:
+        class ThreadedTCPServer(SocketServer.ForkingMixIn, wsgiref.simple_server.WSGIServer):
+            pass
+        server = ThreadedTCPServer((host, port), wsgiref.simple_server.WSGIRequestHandler)
+        server.set_app(wsgi_app)
+    else:
+        server = wsgiref.simple_server.make_server(host, port, wsgi_app)
+    def log_message(self, format, *args):
+        if not SILENT:
+            print(format%(args))
+    server.RequestHandlerClass.log_message = log_message
+    return server
+
+def start_thread(host='127.0.0.1', port=8800, silent=True):
+    global RELOAD, SILENT, _server_process
+    RELOAD = False
+    SILENT = silent
+    class Server(threading.Thread):
+        def __init__(self):
+            super(Server, self).__init__()
+            self._server = make_server(host, port)
+
+        def run(self):
+            self._server.serve_forever()
+
+        def stop(self):
+            self._server.shutdown()
+            self._server.socket.close()
+            print("Pico server has stopped")
+
+    _server_process = Server()
+    _server_process.start()
+    print("Serving on http://%s:%s/"%(host, port))
+    return _server_process
+
+def stop_thread():
+    _server_process.stop()
+    _server_process.join(1)
+
 
 def is_authorised(f, authenticated_user):
     if hasattr(f, 'private') and f.private:
