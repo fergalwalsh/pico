@@ -40,7 +40,7 @@ class Response(object):
         
     @property
     def output(self):
-        print(self.type)
+        log(self.type)
         if hasattr(self.content, 'read'):
             self.type = "file"
         if self.type == "plaintext":
@@ -105,7 +105,7 @@ def is_authorised(f, authenticated_user):
 def call_function(module, function_name, parameters, authenticated_user=None):
     try:
         f = getattr(module, function_name)
-    except:
+    except Exception:
         raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function_name, parameters))
     if not is_authorised(f, authenticated_user):
         raise Exception("You are not authorised to access this function")
@@ -150,10 +150,10 @@ def call(params):
         else:
             try:
                 parameters[k] = json.loads(parameters[k])
-            except:
+            except Exception:
                 try:
                     parameters[k] = json.loads(parameters[k].replace("'", '"'))
-                except:
+                except Exception:
                     parameters[k] = parameters[k]
     callback = params.get('_callback', None)
     init_args = json.loads(params.get('_init', '[]'))
@@ -167,7 +167,7 @@ def call(params):
         try:
             response.content = open(CACHE_PATH + cache_key(params))
             response.from_cache = True
-            print("Serving from cache")
+            log("Serving from cache")
         except IOError:
             pass
     elif not response.content:
@@ -180,12 +180,12 @@ def call(params):
         else:
             response = call_function(module, function, parameters, authenticated_user)
         response.json_dumpers = getattr(module, "json_dumpers", {})
-        print(usecache, response.cacheable)
+        log(usecache, response.cacheable)
         if usecache and response.cacheable:
-            print("Saving to cache")
+            log("Saving to cache")
             try:
                 os.stat(CACHE_PATH)
-            except:
+            except Exception:
                 os.mkdir(CACHE_PATH)
             f = open(CACHE_PATH + cache_key(params), 'w')
             out = response.content
@@ -245,11 +245,10 @@ def load_module(module_name):
         del sys.modules[module_name]
     if not sys.path.__contains__(modules_path):
         sys.path.insert(0, modules_path)
-    __import__(module_name)
-    m = sys.modules[module_name]
+    m = __import__(module_name)
     if RELOAD:
         m = reload(m)
-        print("Module %s loaded"%module_name)
+        log("Module %s loaded"%module_name)
     if not (hasattr(m, 'pico') and m.pico.magic == pico.magic):
         raise ImportError('This module has not imported pico and therefore is not picoable!')
     return m
@@ -267,7 +266,7 @@ def file_handler(path):
     if not file_exists:
         file_path = os.path.join(file_path, DEFAULT)
 
-    print("Serving: " + file_path)
+    log("Serving: " + file_path)
     if os.path.isfile(file_path):
         size = os.path.getsize(file_path)
         mimetype = mimetypes.guess_type(file_path)
@@ -304,14 +303,18 @@ def authenticate(params, module=None):
         if dt > 60:
             raise Exception("Bad nonce. The time difference is: %s"%dt)
         password = users.get(username, {}).get('password', None)
-        # print(password, str(nonce), _hash(password + str(nonce)))
+        # log(password, str(nonce), _hash(password + str(nonce)))
         if password and key == _hash(password + str(nonce)):
-            print("authenticated_user: %s"%username)
+            log("authenticated_user: %s"%username)
         else:
             raise Exception("Bad username or password")
         return username
     else:
         return None
+
+def log(*args):
+    if not SILENT:
+        print(args[0] if len(args) == 1 else args)
 
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
@@ -336,13 +339,10 @@ def wsgi_app(environ, start_response):
         params.update(cgi.parse_qs(post_params))
         for k in params:
             params[k] = params[k][0]
-        print('------')
-        # print(params)
-        picojs = json.loads(params.get('_picojs', 'false'))
+        log('------')
         try:
             path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
             if BASE_PATH: path = path.split(BASE_PATH)[1]
-            print(path)
             handler = url_handlers.get(path.replace('/pico/', '/'), None)
             if handler:
                 response = handler(params)
@@ -359,12 +359,9 @@ def wsgi_app(environ, start_response):
             report['traceback'] = tb_str
             report['url'] = path.replace('/pico/', '/')
             report['params'] = dict([(k, params[k][:100] + ('...' if len(params[k]) > 100 else '')) for k in params])
-            print(json.dumps(report, indent=1))
+            log(json.dumps(report, indent=1))
             response.content = report
-            if picojs:
-                response.callback = 'pico.exception'
-            else:
-                response.status = '500 ' + str(e)
+            response.status = '500 ' + str(e)
     response.headers.append(('Access-Control-Allow-Origin', '*'))
     response.headers.append(('Access-Control-Allow-Headers', 'Content-Type'))
     start_response(response.status, response.headers)
@@ -385,6 +382,7 @@ STATIC_URL_MAP = [
 DEFAULT = 'index.html'
 RELOAD = True
 STREAMING = False
+SILENT = False
 USERS = {}
 if __name__ == '__main__':
     main()
