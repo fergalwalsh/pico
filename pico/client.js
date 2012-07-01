@@ -360,18 +360,21 @@ var pico = (function(){
 
     pico.load = function(module, result_handler)
     {
-        // var params = {};
-        // if(module.substr(0, 7) != 'http://'){
-        //     var url = pico.url + 'module/';
-        //     params['_module'] = module;
-        // }
-        // else var url = module;
+        if(module.substr(0, 7) != 'http://'){
+            var url = pico.url + 'module/' + module;
+        }
+        else{
+            var url = module;
+            var s = module.split('/module/');
+            var module = s[s.length-1].replace('/', '');
+        }
         var callback = function(result, url){
             var ns = create_namespace(module);
  
             ns.__name__ = module;
-            ns.__url__ = url.substr(0,url.indexOf("call/"));
-
+            ns.__url__ = url.substr(0,url.indexOf("module/"));
+            ns.__doc__ = result['__doc__']
+            delete result['__doc__'];
             // debug
             test = result;
 
@@ -387,8 +390,8 @@ var pico = (function(){
                 result_handler(ns);
             }
         };
-        var obj = {'__name__': 'pico.server', '__url__': pico.url};
-        pico.call_function(obj, 'load', {'module_name': module}, callback, false);
+        return pico.get(url, undefined, callback)
+    };
     };
 
     pico.authenticate = function(username, password, callback){
