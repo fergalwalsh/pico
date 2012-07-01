@@ -203,17 +203,23 @@ def load(module_name):
 
 def module_dict(module):
     module_dict = {}
-                class_dict[m[0]] = func_dict(f)
-        f = m[1]
-        if not (m[0].startswith('_') or hasattr(f, 'private')):
-            module_dict[m[0]] = func_dict(f)
     pico_exports = getattr(module, 'pico_exports', None)
+    members = inspect.getmembers(module)
+    def function_filter(x):
         (name, f) = x
+        return inspect.isfunction(f) \
+        and (not pico_exports or name in pico_exports) \
+        and f.__module__ == module.__name__ \
+        and not name.startswith('_') \
         and not hasattr(f, 'private')
 
+    def class_filter(x):
         (name, f) = x
         return inspect.isclass(f) \
+        and issubclass(f, pico.Pico) \
         and (not pico_exports or name in pico_exports) \
+        and f.__module__ == module.__name__ \
+        and not name.startswith('_') \
         and not hasattr(f, 'private')
     class_defs = dict((name, class_dict(cls)) for (name, cls) in filter(class_filter, members))
     function_defs = dict((name, func_dict(f)) for (name, f) in filter(function_filter, members))
@@ -231,9 +237,10 @@ def class_dict(cls):
     class_dict = {'__class__': cls.__name__}
     methods = filter(method_filter, inspect.getmembers(cls))
     class_dict.update(dict((name, func_dict(f)) for (name, f) in methods))
+    class_dict['__doc__'] = cls.__doc__
     return class_dict
+
 def func_dict(f):
-    protected = ((hasattr(f, 'protected') and f.protected))
     func_dict = {}
     func_dict['cache'] = ((hasattr(f, 'cacheable') and f.cacheable))
     func_dict['stream'] = ((hasattr(f, 'stream') and f.stream))
