@@ -318,6 +318,7 @@ def load_module(module_name):
     if not sys.path.__contains__(modules_path):
         sys.path.insert(0, modules_path)
     m = __import__(module_name)
+    m = sys.modules[module_name]
     if RELOAD:
         m = reload(m)
         log("Module %s loaded"%module_name)
@@ -391,26 +392,28 @@ def log(*args):
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
-        # This is to hanle the preflight request for CORS. 
+        # This is to hanle the preflight request for CORS.
         # See https://developer.mozilla.org/en/http_access_control
         response = Response()
         response.status = "200 OK"
     else:
-        try:
-          request_body_size = int(environ.get('CONTENT_LENGTH', 0))
-        except (ValueError):
-          request_body_size = 0
-        post_params = environ['wsgi.input'].read(request_body_size)
-        get_params = environ['QUERY_STRING'] 
+        params = {}
+        # if parameters are in the URL, we extract them first
+        get_params = environ['QUERY_STRING']
         if get_params == '' and '/call/' in environ['PATH_INFO']:
             path = environ['PATH_INFO'].split('/')
             environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
-            get_params = path[-1]
-        params =  {}
-        params.update(cgi.parse_qs(get_params))
-        params.update(cgi.parse_qs(post_params))
-        for k in params:
-            params[k] = params[k][0]
+            params.update(cgi.parse_qs(path[-1]))
+
+        # now get GET and POST data
+        fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
+        for name in fields:
+            if fields[name].filename:
+                params[name] = fields[name].file
+            elif type(fields[name]) == list and fields[name][0].file:
+                params[name] = [v.file for v in fields[name]]
+            else:
+                params[name] = fields[name].value
         log('------')
         try:
             path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
@@ -438,7 +441,7 @@ def wsgi_app(environ, start_response):
             report['exception'] = str(e)
             report['traceback'] = tb_str
             report['url'] = path.replace('/pico/', '/')
-            report['params'] = dict([(k, params[k][:100] + ('...' if len(params[k]) > 100 else '')) for k in params])
+            report['params'] = dict([(k, repr(params[k])[:100] + ('...' if len(repr(params[k])) > 100 else '')) for k in params])
             log(json.dumps(report, indent=1))
             response.content = report
             response.status = '500 ' + str(e)
