@@ -24,6 +24,7 @@ import pico
 
 path = (os.path.dirname(__file__) or '.') + '/'
 _server_process = None
+pico_exports = []
 
 class Response(object):
     def __init__(self, **kwds):
@@ -53,6 +54,16 @@ class Response(object):
             def f(stream):
                 for d in stream:
                     yield 'data: ' + pico.to_json(d) + '\n\n'
+            return f(self.content)
+        if self.type == "chunks":
+            def f(response):
+                yield (' ' * 1200) + '\n'
+                yield '[\n'
+                delimeter = ''
+                for r in response:
+                    yield delimeter + pico.to_json(r, self.json_dumpers) + '\n'
+                    delimeter = ','
+                yield "]\n"
             return f(self.content)
         else:
             s = pico.to_json(self.content, self.json_dumpers)
@@ -153,6 +164,8 @@ def call_function(module, function_name, parameters, authenticated_user=None):
     if hasattr(f, 'stream') and f.stream and STREAMING:
         response.headers = [('Content-Type', 'text/event-stream')]
         response.type = "stream"
+    elif response.content.__class__.__name__ == 'generator':
+        response.type = "chunks"
     return response
     
 
