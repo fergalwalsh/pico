@@ -106,6 +106,8 @@ def load(module_name):
     """
     module_dict = _call_function('pico.server', 'load', locals())
     module = imp.new_module(module_name)
+    module.__doc__ = module_dict['__doc__']
+    del module_dict['__doc__']
     for k in module_dict:
         args = module_dict[k]['args']
         args_string = ', '.join(["%s=%s"%(arg, json.dumps(default).replace("null", "None")) for arg, default in args if arg != None])
