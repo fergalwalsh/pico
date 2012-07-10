@@ -134,25 +134,27 @@ var pico = (function(){
     };
 
     pico.exception = function(e){
-        if(e.exception.contains("password") || e.exception.contains("not authorised")){
-            var f = function(username, password){
-                _username = username;
-                _password = hex_md5(password);
+        if(e.exception){
+            if(e.exception.contains("password") || e.exception.contains("not authorised")){
+                var f = function(username, password){
+                    _username = username;
+                    _password = hex_md5(password);
+                    var x = inprogress_auth_gets[e.params._key];
+                    var def = pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
+                    def.done(function() {
+                        x.deferred.resolve.apply(x.deferred, arguments);
+                    });
+                }
+                pico.on_authentication_failure(e, f);
+            }else if(e.exception.contains("nonce")){
+                var td = e.exception.split(':')[1];
+                pico.td += parseInt(td);
                 var x = inprogress_auth_gets[e.params._key];
                 var def = pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
                 def.done(function() {
                     x.deferred.resolve.apply(x.deferred, arguments);
                 });
             }
-            pico.on_authentication_failure(e, f);
-        }else if(e.exception.contains("nonce")){
-            var td = e.exception.split(':')[1];
-            pico.td += parseInt(td);
-            var x = inprogress_auth_gets[e.params._key];
-            var def = pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
-            def.done(function() {
-                x.deferred.resolve.apply(x.deferred, arguments);
-            });
         }
         else{
             pico.on_error(e);
@@ -175,6 +177,13 @@ var pico = (function(){
         if(typeof(callback) == "undefined"){
             callback = pico.log;
         }
+        if(typeof(callback) == "object" && callback.resolve && callback.notify){
+            var deferred = callback;
+        }
+        else{
+            var deferred = new pico.Deferred();
+            deferred.done(callback);
+        }
         if(typeof(data) == "object"){
             data = urlencode(data);
         }
@@ -182,17 +191,44 @@ var pico = (function(){
         var xhr = new XMLHttpRequest();
         xhr.open(data.length > 0 ? 'POST' : 'GET', url);
         xhr.resonseType="text";
-        xhr.onload = function(e){
-            if(xhr.status == 200){
-                callback(JSON.parse(this.response), url);
+        xhr._characters_read = 0;
+        xhr.onreadystatechange = function(){
+            if(this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
+                var i = this.response.indexOf("\n", this._characters_read + 1);
+                while (i > -1){
+                    var response = this.response.substring(this._characters_read, i);
+                    response = (response.match(/([^\,\n][^\n\[\]]*\S+[^\n\[\]]*)/) || [undefined])[0];
+                    this._characters_read = i;
+                    if (response){
+                        var result = JSON.parse(response);
+                        this._last_result = result;
+                        deferred.notify(result, url);
+                    }
+                    i = this.response.indexOf("\n", this._characters_read + 1);
+                }
             }
-            else{
-                pico.exception(JSON.parse(this.response));
+            if(this.readyState == 4){
+                if(xhr.status == 200){
+                    if(this._characters_read == 0){
+                        deferred.resolve(JSON.parse(this.response), url);
+                    }
+                    else{
+                        deferred.resolve(this._last_result, url);
+                    }
+                }
+                else{
+                    if(this._characters_read == 0){
+                        deferred.reject(JSON.parse(this.response));
+                    }
+                    else{
+                        deferred.reject({'exception': "Exception in chunked response"});
+                    }
+                }
             }
         };
-        xhr.onerror = pico.exception;
+        deferred.fail(pico.exception);
         xhr.send(data);
-        return xhr;
+        return deferred.promise(xhr);
     };
 
     pico.get = function(url, data, callback)
@@ -214,10 +250,17 @@ var pico = (function(){
         if(data){
             url += "&" + data;
         }
+        if(typeof(callback) == "object" && callback.resolve && callback.notify){
+            var deferred = callback;
+        }
+        else{
+            var deferred = new pico.Deferred();
+        }
         if(callback)
         {
             var callback_name = 'jsonp' + Math.floor(Math.random()*10e10);
-            window[callback_name] = function(result){callback(result, url); /*delete window[callback_name]*/};
+            window[callback_name] = function(result){deferred.resolve(result, url); /*delete window[callback_name]*/};
+            deferred.done(callback);
             var params = {'_callback': callback_name};
             url += url.indexOf('?') > -1 ? '&' : '?'
             url += urlencode(params);
@@ -255,6 +298,7 @@ var pico = (function(){
             }
         
         }
+        return deferred.promise();
     };
 
     pico.call_function = function(object, function_name, args, callback, use_cache, use_auth)
@@ -284,11 +328,7 @@ var pico = (function(){
             deferred.done(callback);
         }
 
-        pico.get(url, data, function() {
-            deferred.resolve.apply(deferred, arguments);
-        });
-
-        return deferred.promise();
+        return pico.get(url, data, deferred);
     };
 
     pico.stream = function(object, function_name, args, callback, use_cache, use_auth)
@@ -364,6 +404,11 @@ var pico = (function(){
 
     pico.load = function(module, result_handler)
     {
+        return pico.load_as(module, undefined, result_handler);
+    };
+
+    pico.load_as = function(module, alias, result_handler){
+
         if(module.substr(0, 7) != 'http://'){
             var url = pico.url + 'module/' + module;
         }
@@ -372,12 +417,16 @@ var pico = (function(){
             var s = module.split('/module/');
             var module = s[s.length-1].replace('/', '');
         }
+        if(alias == undefined){
+            alias = module;
+        }
         var callback = function(result, url){
-            var ns = create_namespace(module);
+            var ns = create_namespace(alias);
             for(var k in ns){
                 delete ns[k];
             }
             ns.__name__ = module;
+            ns.__alias__ = alias;
             ns.__url__ = url.substr(0,url.indexOf("module/"));
             ns.__doc__ = result['__doc__']
             delete result['__doc__'];
@@ -397,15 +446,6 @@ var pico = (function(){
             }
         };
         return pico.get(url, undefined, callback)
-    };
-
-    pico.load_as = function(module, as_name, result_handler){
-        return pico.load(module, function(m){
-            window[as_name] = m;
-            if(result_handler){
-                result_handler(m);
-            }
-        });
     };
 
     pico.authenticate = function(username, password, callback){
@@ -436,14 +476,17 @@ var pico = (function(){
     };
 
     pico.reload = function(module, callback){
-        return pico.load(module.__url__ + 'module/' + module.__name__, function(m){
-            module=m;
-            if(callback) callback(m);
-        });
+        return pico.load_as(module.__url__ + 'module/' + module.__name__, module.__alias__, callback);
     };
 
     pico.log = function(arg){
         console.log(arg);
+    };
+
+    pico.set = function(name, root){
+        return function(r){
+            (root || window)[name] = r;
+        };
     };
 
     return pico;
