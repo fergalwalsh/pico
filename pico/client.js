@@ -19,6 +19,17 @@ var pico = (function(){
     }
 
     /**
+     * Returns an object with properties from `keys` and values from `values`
+     */
+    function combine(keys, values) {
+        var obj = {};
+        for(var i = 0, l = keys.length; i < l; i++) {
+            obj[keys[i]] = values[i];
+        }
+        return obj;
+    }
+
+    /**
      * Creates a namespace from a point-seperated string.
      */    
     function create_namespace(ns, root) {
@@ -39,12 +50,8 @@ var pico = (function(){
             use_auth = !!definition["protected"];
 
         var proxy = function() {
-            var args_dict = {},
+            var args_dict = combine(args, arguments),
                 callback;
-
-            for(var i = 0, l = args.length; i < l; i++) {
-                args_dict[args[i]] = arguments[i];
-            }
             
             if(arguments.length === args.length + 1 && 
                typeof arguments[arguments.length - 1] === 'function') {
@@ -63,6 +70,14 @@ var pico = (function(){
 
         proxy.toString = function() {
             return this.__doc__;
+        };
+
+        // helper function to get generate pico URL
+        proxy.prepare_url = function() {
+            var data = combine(args, arguments),
+                request = pico.prepare_request(module, function_name, data, use_cache, use_auth);
+
+            return request.base_url + '&' + urlencode(request.data);
         };
 
         return proxy;
@@ -393,8 +408,7 @@ var pico = (function(){
         var request = {};
         request.key = params['_key'];
         request.base_url = url;
-        request.data = urlencode(data);;
-        request.url = encodeURI(request.base_url) + '&' + request.data;
+        request.data = data;
         return request;
     };
 
