@@ -4,7 +4,7 @@ if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
 var pico = (function(){
 
     function urlencode (params){
-         return keys(params).map(function(k){return k + "=" +  encodeURIComponent(params[k])}).join('&');
+        return keys(params).map(function(k){return k + "=" +  encodeURIComponent(params[k])}).join('&');
     }
 
     function values (object){
@@ -16,6 +16,27 @@ var pico = (function(){
 
     function keys (object){
         return Object.keys(object);
+    }
+
+    /**
+     * Returns true if `callback` returns true for any propery
+     * else false
+     */
+    function some(object, callback, thisObject) {
+        for(var k in object) {
+            if(callback.call(thisObject, object[k], k, callback)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns true of the object is a File or FileList
+     * else false
+     */
+    function is_file_or_filelist(obj) {
+        return obj instanceof File || obj instanceof FileList;
     }
 
     /**
@@ -121,7 +142,6 @@ var pico = (function(){
         };
 
         return Constr;
-        
     }
 
 
@@ -182,6 +202,7 @@ var pico = (function(){
 
     pico.xhr = function(url, data, callback)
     {
+
         if(typeof(data) == "function" && typeof(callback) == "undefined"){
             callback = data;
             data = undefined;
@@ -199,12 +220,35 @@ var pico = (function(){
             var deferred = new pico.Deferred();
             deferred.done(callback);
         }
-        if(typeof(data) == "object"){
-            data = urlencode(data);
+        if(typeof(data) == "object") {
+            if(some(data, is_file_or_filelist)) {
+                var orig_data = data;
+                data = new FormData();
+                for(var k in orig_data) {
+                    if(orig_data[k] instanceof File) {
+                        data.append(k, orig_data[k]);
+                    }
+                    else if(orig_data[k] instanceof FileList) {
+                        var list = orig_data[k];
+                        for(var i = 0, l = list.length; i < l; i++) {
+                            data.append(k, list[i]);
+                        }
+                    }
+                    else {
+                        data.append(k, orig_data[k]);
+                    }
+                }
+            }
+            else {
+                data = urlencode(data);
+                data = data.replace(/%20/g,"+");
+            }
         }
-        data =  data.replace(/%20/g,"+");
         var xhr = new XMLHttpRequest();
-        xhr.open(data.length > 0 ? 'POST' : 'GET', url);
+        xhr.open(data.length > 0 || data instanceof FormData ? 'POST' : 'GET', url);
+        if(!(data instanceof FormData)) {
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        }
         xhr.resonseType="text";
         xhr._characters_read = 0;
         xhr.onreadystatechange = function(){
@@ -277,7 +321,7 @@ var pico = (function(){
             window[callback_name] = function(result){deferred.resolve(result, url); /*delete window[callback_name]*/};
             deferred.done(callback);
             var params = {'_callback': callback_name};
-            url += url.indexOf('?') > -1 ? '&' : '?'
+            url += url.indexOf('?') > -1 ? '&' : '?';
             url += urlencode(params);
         }
         var elem;
@@ -289,17 +333,17 @@ var pico = (function(){
                 style.type = 'text/css';
                 style.src = url;
                 style.rel = "stylesheet";
-                style.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
+                style.onload = function(){document.getElementsByTagName("body")[0].removeChild(this);};
                 elem.appendChild(style);
             }
             else{
                 var script = document.createElement('script');
                 script.type = 'text/javascript';
                 script.src = url;
-                script.onload = function(){document.getElementsByTagName("body")[0].removeChild(this)};
+                script.onload = function(){document.getElementsByTagName("body")[0].removeChild(this);};
                 elem.appendChild(script);
             }
-            if(pico.debug) console.log("pico.get in BODY " + url);
+            if(pico.debug) {console.log("pico.get in BODY " + url); }
         }
         else
         {
@@ -379,8 +423,10 @@ var pico = (function(){
     pico.prepare_request = function(object, function_name, args, use_cache, use_auth){
         var data = {};
         for(k in args){
-            if(args[k] != undefined) data[k] = pico.json.dumps(args[k]);
-        };
+            if(args[k] != undefined) {
+               data[k] = is_file_or_filelist(args[k]) ? args[k] : pico.json.dumps(args[k]);
+            }
+        }
         var params = {};
         if('__class__' in object){
             params['_module'] = object.__module__;
