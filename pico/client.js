@@ -4,20 +4,43 @@ if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
 var pico = (function(){
 
     function urlencode (params){
-        return keys(params).map(function(k){return k + "=" +  encodeURIComponent(params[k])}).join('&');
+        return map(function(k){return k + "=" +  encodeURIComponent(params[k])}, keys(params)).join('&');
     }
 
     function values (object){
         var result = [];
-        for (var key in object)
+        for (var key in object){
             result.push(object[key]);
+        }
         return result;
     }
 
     function keys (object){
-        return Object.keys(object);
+        if(Object.keys){
+            return Object.keys(object);
+        }
+        else{
+            var result = []
+            for (var key in object) {
+                if (Object.prototype.hasOwnProperty.call(object, key)) result.push(key);
+            }
+            return result;
+        }
     }
 
+    function map ( f, array ){
+        var result = [];
+        if(Array.prototype.map){
+            result = Array.prototype.map.call(array, f);
+        }
+        else{
+            for( var i in array){
+                result.push(f(array[i]));
+            }
+        }
+        return result;
+    }
+    
     /**
      * Returns true if `callback` returns true for any propery
      * else false
@@ -36,7 +59,7 @@ var pico = (function(){
      * else false
      */
     function is_file_or_filelist(obj) {
-        return obj instanceof File || obj instanceof FileList;
+        return window.File && window.FileList && (obj instanceof File || obj instanceof FileList);
     }
 
     /**
@@ -66,7 +89,7 @@ var pico = (function(){
     }
 
     function create_function_proxy(definition, function_name, module) {
-        var args = definition.args.map(function(x){return x[0];}),
+        var args = map(function(x){return x[0];}, definition.args),
             use_cache = !!definition.cache,
             use_auth = !!definition["protected"];
 
@@ -107,7 +130,7 @@ var pico = (function(){
     function create_class_proxy(definition, class_name, module_name) {
         var doc = definition['__doc__']
         delete definition['__doc__'];
-        var args = definition.__init__.args.map(function(x){return x[0];}),
+        var args = map(function(x){return x[0];}, definition.__init__.args),
             Constr = function() {
                 this.__args__ = [].slice.call(arguments);
                 this.__module__ = module_name;
@@ -245,8 +268,8 @@ var pico = (function(){
             }
         }
         var xhr = new XMLHttpRequest();
-        xhr.open(data.length > 0 || data instanceof FormData ? 'POST' : 'GET', url);
-        if(!(data instanceof FormData)) {
+        xhr.open(data.length > 0 || (window.FormData && data instanceof FormData) ? 'POST' : 'GET', url);
+        if(!(window.FormData && data instanceof FormData)) {
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         }
         xhr.resonseType="text";
@@ -269,7 +292,7 @@ var pico = (function(){
             if(this.readyState == 4){
                 if(xhr.status == 200){
                     if(this._characters_read == 0){
-                        deferred.resolve(JSON.parse(this.response), url);
+                        deferred.resolve(JSON.parse(this.response || this.responseText), url);
                     }
                     else{
                         deferred.resolve(this._last_result, url);
@@ -277,7 +300,7 @@ var pico = (function(){
                 }
                 else{
                     if(this._characters_read == 0){
-                        deferred.reject(JSON.parse(this.response));
+                        deferred.reject(JSON.parse(this.response || this.responseText));
                     }
                     else{
                         deferred.reject({'exception': "Exception in chunked response"});
@@ -551,8 +574,12 @@ var pico = (function(){
 
     return pico;
 }());
-
-document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
+if(!document.addEventListener){
+    document.attachEvent('DOMContentLoaded', function(){pico.main()});
+}
+else{
+    document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
+}
 
 
 
