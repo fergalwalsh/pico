@@ -13,4 +13,4 @@ The Pico protocal is very simple so it is also easy to communicate with Pico web
 See the [wiki](https://github.com/fergalwalsh/pico/wiki) for more information.
 
 
-![githalytics.com alpha](https://nojsstats.appspot.com/UA-34240929-1/github.com)
+![](https://nojsstats.appspot.com/UA-34240929-1/github.com)
