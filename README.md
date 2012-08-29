@@ -11,3 +11,5 @@ Pico is basically a Remote Procedure Call (RPC) library for Python without any o
 The Pico protocal is very simple so it is also easy to communicate with Pico web services from other languages (e.g. Java, Objective-C for mobile applications). See the client.py for a reference implementation.
 
 See the [wiki](https://github.com/fergalwalsh/pico/wiki) for more information.
+
+[![](http://ncg.nuim.ie/i2maps/~fwalsh/pico/call/?_module=tracker&_function=track&id=pico_readme)]
