@@ -12,4 +12,4 @@ The Pico protocal is very simple so it is also easy to communicate with Pico web
 
 See the [wiki](https://github.com/fergalwalsh/pico/wiki) for more information.
 
-[![](http://ncg.nuim.ie/i2maps/~fwalsh/pico/call/?_module=tracker&_function=track&id=pico_readme)]
+
