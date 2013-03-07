@@ -344,7 +344,7 @@ def file_handler(path):
         size = os.path.getsize(file_path)
         mimetype = mimetypes.guess_type(file_path)
         response.headers = [
-            ("Content-type", mimetype[0]),
+            ("Content-type", mimetype[0] or 'text/plain'),
             ("Content-length", str(size)),
             ("Cache-Control", 'public, max-age=22222222'),
         ]
