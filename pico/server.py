@@ -205,7 +205,7 @@ def call(params):
     callback = params.get('_callback', None)
     init_args = json.loads(params.get('_init', '[]'))
     class_name = params.get('_class', None)
-    usecache = json.loads(params.get('_usecache', 'false'))
+    usecache = json.loads(params.get('_usecache', 'true'))
     response = Response()
     if module_name == 'pico':
         if function == 'authenticate':
@@ -217,7 +217,7 @@ def call(params):
             log("Serving from cache")
         except IOError:
             pass
-    elif not response.content:
+    if not response.content:
         module = load_module(module_name)
         authenticated_user = authenticate(params, module)
         # parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
@@ -235,10 +235,10 @@ def call(params):
             except Exception:
                 os.mkdir(CACHE_PATH)
             f = open(CACHE_PATH + cache_key(params), 'w')
-            out = response.content
+            out = response.output
             if hasattr(out, 'read'):
                 out = out.read()
-                response.content.seek(0)
+                response.output.seek(0)
             f.write(out)
             f.close()
     response.callback = callback
