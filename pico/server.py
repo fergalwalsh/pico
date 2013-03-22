@@ -403,7 +403,7 @@ def wsgi_app(environ, start_response):
         if get_params == '' and '/call/' in environ['PATH_INFO']:
             path = environ['PATH_INFO'].split('/')
             environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
-            params.update(cgi.parse_qs(path[-1]))
+            environ['QUERY_STRING'] = path[-1]
 
         # now get GET and POST data
         fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
