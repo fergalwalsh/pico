@@ -302,7 +302,7 @@ def error(params):
     return Response(content="Error 404. Bad URl", type="plaintext")
 
 def pico_js(params):
-    return Response(content=open(path + 'client.js'), type="file")
+    return Response(content=open(path + 'client.js', 'rb'), type="file")
 
 def load_module(module_name):
     if module_name == 'pico':
@@ -348,7 +348,7 @@ def file_handler(path):
             ("Content-length", str(size)),
             ("Cache-Control", 'public, max-age=22222222'),
         ]
-        response.content = open(file_path)
+        response.content = open(file_path, 'rb')
         response.type = "file"
     else:
         response.status = "404 NOT FOUND"
