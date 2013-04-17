@@ -1,4 +1,10 @@
-##Write your module in Python:
+##Install
+`easy_install pico`
+or
+`pip install pico`
+
+
+##Write a Python module:
 ```python
 # example.py
 import pico
