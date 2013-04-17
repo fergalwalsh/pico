@@ -223,9 +223,19 @@ var pico = (function(){
         return pico.xhr(url, undefined, callback);
     };
 
+    pico.get_text = function(url, callback){
+        return pico.xhr(url, "response:text", callback);
+    };
+    
     pico.xhr = function(url, data, callback)
     {
-
+        if(data == "response:text"){
+            var parse = function(d){return d};
+            data = undefined;
+        }
+        else{
+            var parse = JSON.parse;
+        }
         if(typeof(data) == "function" && typeof(callback) == "undefined"){
             callback = data;
             data = undefined;
@@ -282,7 +292,7 @@ var pico = (function(){
                     response = (response.match(/([^\,\n][^\n\[\]]*\S+[^\n\[\]]*)/) || [undefined])[0];
                     this._characters_read = i;
                     if (response){
-                        var result = JSON.parse(response);
+                        var result = parse(response);
                         this._last_result = result;
                         deferred.notify(result, url);
                     }
@@ -292,7 +302,7 @@ var pico = (function(){
             if(this.readyState == 4){
                 if(xhr.status == 200){
                     if(this._characters_read == 0){
-                        deferred.resolve(JSON.parse(this.response || this.responseText), url);
+                        deferred.resolve(parse(this.response || this.responseText), url);
                     }
                     else{
                         deferred.resolve(this._last_result, url);
@@ -300,7 +310,7 @@ var pico = (function(){
                 }
                 else{
                     if(this._characters_read == 0){
-                        deferred.reject(JSON.parse(this.response || this.responseText));
+                        deferred.reject(parse(this.response || this.responseText));
                     }
                     else{
                         deferred.reject({'exception': "Exception in chunked response"});
