@@ -435,9 +435,15 @@ var pico = (function(){
         }
 
         stream.open = function(){
-            stream.socket = new EventSource(request.url);
+            stream.socket = new EventSource(request.base_url + '&' + urlencode(request.data));
             stream.socket.onmessage = function(e){
-                deferred.notify(JSON.parse(e.data));
+                var message = JSON.parse(e.data)
+                if(message == 'PICO_CLOSE_STREAM'){
+                    stream.close()
+                }
+                else{
+                    deferred.notify(message);
+                }
             };
         };
         stream.close = function(){

@@ -6,7 +6,7 @@ License: BSD
 """
 
 __author__ = 'Fergal Walsh'
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 import json
 import os

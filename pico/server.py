@@ -54,6 +54,7 @@ class Response(object):
             def f(stream):
                 for d in stream:
                     yield 'data: ' + pico.to_json(d) + '\n\n'
+                yield 'data: "PICO_CLOSE_STREAM"\n\n'
             return f(self.content)
         if self.type == "chunks":
             def f(response):
