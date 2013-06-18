@@ -1,60 +1,108 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-
   <head>
-    <meta charset='utf-8' />
-    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
-    <meta name="description" content="Pico : Pico is a very small web application framework for Python." />
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Pico by fergalwalsh</title>
 
-    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
-
-    <title>Pico</title>
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
   </head>
-
   <body>
+    <div class="wrapper">
+      <header>
+        <h1>Pico</h1>
+        <p>Pico is a very small web application framework for Python.</p>
 
-    <!-- HEADER -->
-    <div id="header_wrap" class="outer">
-        <header class="inner">
-          <a id="forkme_banner" href="https://github.com/fergalwalsh/pico">View on GitHub</a>
+        <p class="view"><a href="https://github.com/fergalwalsh/pico">View the Project on GitHub <small>fergalwalsh/pico</small></a></p>
 
-          <h1 id="project_title">Pico</h1>
-          <h2 id="project_tagline">Pico is a very small web application framework for Python.</h2>
 
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/fergalwalsh/pico/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/fergalwalsh/pico/tarball/master">Download this project as a tar.gz file</a>
-            </section>
-        </header>
-    </div>
+        <ul>
+          <li><a href="https://github.com/fergalwalsh/pico/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/fergalwalsh/pico/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/fergalwalsh/pico">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h2>
+<a name="install" class="anchor" href="#install"><span class="octicon octicon-link"></span></a>Install</h2>
 
-    <!-- MAIN CONTENT -->
-    <div id="main_content_wrap" class="outer">
-      <section id="main_content" class="inner">
-        <p>Pico is a very small web application framework for Python &amp; Javascript.</p>
+<p><code>easy_install pico</code>
+or
+<code>pip install pico</code></p>
 
-<p>Pico allows you to write Python modules, classes and functions that can be imported and called directly from Javascript.</p>
+<h2>
+<a name="write-a-python-module" class="anchor" href="#write-a-python-module"><span class="octicon octicon-link"></span></a>Write a Python module:</h2>
 
-<p>Pico is NOT a Python to Javascript compiler - Pico IS a bridge between server side Python and client side Javascript.</p>
+<div class="highlight"><pre><span class="c"># example.py</span>
+<span class="kn">import</span> <span class="nn">pico</span>
 
-<p>It is a server, a Python libary and a Javascript library! The server is a WSGI application which can be run standalone or behind Apache with mod_wsgi.</p>
+<span class="k">def</span> <span class="nf">hello</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">"World"</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s">"Hello "</span> <span class="o">+</span> <span class="n">name</span>
 
-<p>Pico is basically a Remote Procedure Call (RPC) library for Python without any of the hassle usually associated with RPC. Literally add one line of code (<code>import pico</code>) to your Python module to turn it into a web service that is accessible through the Javascript (and Python) Pico client libararies.</p>
+</pre></div>
 
-<p>The Pico protocal is very simple so it is also easy to communicate with Pico web services from other languages (e.g. Java, Objective-C for mobile applications). See the client.py for a reference implementation.</p>
+<h2>
+<a name="start-the-server" class="anchor" href="#start-the-server"><span class="octicon octicon-link"></span></a>Start the server:</h2>
+
+<p><code>python -m pico.server</code></p>
+
+<p>Or run behind Apache with mod_wsgi</p>
+
+<h2>
+<a name="call-your-python-functions-from-javascript" class="anchor" href="#call-your-python-functions-from-javascript"><span class="octicon octicon-link"></span></a>Call your Python functions from Javascript:</h2>
+
+<div class="highlight"><pre><span class="cp">&lt;!DOCTYPE HTML&gt;</span>
+<span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+  <span class="nt">&lt;title&gt;</span>Pico Example<span class="nt">&lt;/title&gt;</span>
+    <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"/pico/client.js"</span><span class="nt">&gt;&lt;/script&gt;</span>
+    <span class="nt">&lt;script&gt;</span>
+        <span class="nx">pico</span><span class="p">.</span><span class="nx">load</span><span class="p">(</span><span class="s2">"example"</span><span class="p">);</span>
+    <span class="nt">&lt;/script&gt;</span>
+<span class="nt">&lt;/head&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+  <span class="nt">&lt;p</span> <span class="na">id=</span><span class="s">"message"</span><span class="nt">&gt;&lt;/p&gt;</span>
+  <span class="nt">&lt;script&gt;</span>
+  <span class="nx">example</span><span class="p">.</span><span class="nx">hello</span><span class="p">(</span><span class="s2">"Fergal"</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+    <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">'message'</span><span class="p">).</span><span class="nx">innerHTML</span> <span class="o">=</span> <span class="nx">response</span><span class="p">;</span>  
+  <span class="p">});</span>
+  <span class="nt">&lt;/script&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+
+</pre></div>
+
+<h2>
+<a name="what-how" class="anchor" href="#what-how"><span class="octicon octicon-link"></span></a>What? How?</h2>
+
+<ul>
+<li>Pico is a very small web application framework for Python &amp; Javascript.</li>
+<li>Pico allows you to write Python modules, classes and functions that can be imported and called directly from Javascript.</li>
+<li>Pico is not a Python to Javascript compiler 
+
+<ul>
+<li>Pico is a bridge between server side Python and client side Javascript.</li>
+</ul>
+</li>
+<li>Pico is a server, a Python libary and a Javascript library! The server is a WSGI application which can be run standalone or behind Apache with mod_wsgi.</li>
+<li>Pico is a Remote Procedure Call (RPC) library for Python without any of the hassle usually associated with RPC. Literally add one line of code (<code>import pico</code>) to your Python module to turn it into a web service that is accessible through the Javascript (and Python) Pico client libararies.</li>
+</ul><p>The Pico protocal is very simple so it is also easy to communicate with Pico web services from other languages (e.g. Java, Objective-C for mobile applications). See the client.py for a reference implementation.</p>
 
 <p>See the <a href="https://github.com/fergalwalsh/pico/wiki">wiki</a> for more information.</p>
-      </section>
-    </div>
 
-    <!-- FOOTER  -->
-    <div id="footer_wrap" class="outer">
-      <footer class="inner">
-        <p class="copyright">Pico maintained by <a href="https://github.com/fergalwalsh">fergalwalsh</a></p>
-        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+<p><img src="https://nojsstats.appspot.com/UA-34240929-1/github.com" alt=""></p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/fergalwalsh">fergalwalsh</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
       </footer>
     </div>
-
+    <script src="javascripts/scale.fix.js"></script>
               <script type="text/javascript">
             var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
             document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
@@ -65,7 +113,6 @@
             pageTracker._trackPageview();
             } catch(err) {}
           </script>
-
 
   </body>
 </html>
