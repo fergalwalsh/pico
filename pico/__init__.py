@@ -1,12 +1,12 @@
 """
-Pico is a very small web application framework for Python.
+Pico is a very small RPC library and web application framework for Python.
 
 Copyright (c) 2012, Fergal Walsh.
 License: BSD
 """
 
 __author__ = 'Fergal Walsh'
-__version__ = '1.1.1'
+__version__ = '1.1.2'
 
 import json
 import os
