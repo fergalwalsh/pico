@@ -29,9 +29,10 @@ pico_exports = []
 class Response(object):
     def __init__(self, **kwds):
         self.status = '200 OK'
-        self.headers = [('Content-type', 'text/plain')]
+        self._headers = {}
         self.type = "object"
         self.cacheable = False
+        self.callback = None
         self.json_dumpers = {}
         self.__dict__.update(kwds)
     
@@ -40,9 +41,33 @@ class Response(object):
             return object.__getattribute__(self, a)
         except AttributeError, e:
             return None
-        
+
+    def set_header(self, key, value):
+        self._headers[key] = value
+
+    @property   
+    def headers(self):
+        headers = dict(self._headers)
+        if self.cacheable:
+            headers['Cache-Control'] = 'public, max-age=22222222'
+        if self.type == 'stream':
+            headers['Content-Type'] = 'text/event-stream'
+        elif self.type == 'object':
+            if self.callback:
+                headers['Content-Type'] = 'application/javascript'
+            else:
+                headers['Content-Type'] = 'application/json'
+            headers['Content-Length'] = str(len(self.output[0]))
+        else:
+            if 'Content-type' not in headers:
+                headers['Content-Type'] = 'text/plain'
+        return headers.items()
+
+
     @property
     def output(self):
+        if self._output:
+            return self._output
         log(self.type)
         if hasattr(self.content, 'read'):
             self.type = "file"
@@ -57,6 +82,7 @@ class Response(object):
                 yield 'data: "PICO_CLOSE_STREAM"\n\n'
             return f(self.content)
         if self.type == "chunks":
+            log("chunks")
             def f(response):
                 yield (' ' * 1200) + '\n'
                 yield '[\n'
@@ -70,7 +96,9 @@ class Response(object):
             s = pico.to_json(self.content, self.json_dumpers)
             if self.callback:
                 s = self.callback + '(' + s + ')'
-            return [s,]
+            s = [s,]
+            self._output = s
+            return s
 
 def main():
     opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port=", "no-reload"])
@@ -161,9 +189,7 @@ def call_function(module, function_name, parameters, authenticated_user=None):
     response = Response(content=results)
     if hasattr(f, 'cacheable') and f.cacheable:
         response.cacheable = True
-        response.headers = [('Cache-Control', 'public, max-age=22222222')]
     if hasattr(f, 'stream') and f.stream and STREAMING:
-        response.headers = [('Content-Type', 'text/event-stream')]
         response.type = "stream"
     elif response.content.__class__.__name__ == 'generator':
         response.type = "chunks"
@@ -213,10 +239,9 @@ def call(params):
             response.content = authenticate(params)
     elif usecache and os.path.exists(CACHE_PATH):
         try:
-            response.content = open(CACHE_PATH + cache_key(params))
-            response.from_cache = True
+            response = serve_file(CACHE_PATH + cache_key(params))
             log("Serving from cache")
-        except IOError:
+        except OSError:
             pass
     if not response.content:
         module = load_module(module_name)
@@ -235,11 +260,13 @@ def call(params):
                 os.stat(CACHE_PATH)
             except Exception:
                 os.mkdir(CACHE_PATH)
-            f = open(CACHE_PATH + cache_key(params), 'w')
+            f = open(CACHE_PATH + cache_key(params) + '.json', 'w')
             out = response.output
             if hasattr(out, 'read'):
                 out = out.read()
                 response.output.seek(0)
+            else:
+                out = out[0]
             f.write(out)
             f.close()
     response.callback = callback
@@ -303,7 +330,7 @@ def error(params):
     return Response(content="Error 404. Bad URl", type="plaintext")
 
 def pico_js(params):
-    return Response(content=open(path + 'client.js', 'rb'), type="file")
+    return serve_file(path + 'client.js')
 
 def load_module(module_name):
     if module_name == 'pico':
@@ -327,8 +354,19 @@ def load_module(module_name):
         raise ImportError('This module has not imported pico and therefore is not picoable!')
     return m
 
-def file_handler(path):
+def serve_file(file_path):
     response = Response()
+    size = os.path.getsize(file_path)
+    mimetype = mimetypes.guess_type(file_path)
+    response.set_header("Content-type", mimetype[0] or 'text/plain')  
+    response.set_header("Content-length", str(size))
+    response.set_header("Cache-Control", 'public, max-age=22222222')
+    response.content = open(file_path, 'rb')
+    response.type = "file"
+    return response
+
+
+def static_file_handler(path):
     file_path = ''
     for (url, directory) in STATIC_URL_MAP:
         m = re.match(url, path)
@@ -339,23 +377,8 @@ def file_handler(path):
     file_exists = os.path.isfile(file_path)
     if not file_exists:
         file_path = os.path.join(file_path, DEFAULT)
-
-    log("Serving: " + file_path)
-    if os.path.isfile(file_path):
-        size = os.path.getsize(file_path)
-        mimetype = mimetypes.guess_type(file_path)
-        response.headers = [
-            ("Content-type", mimetype[0] or 'text/plain'),
-            ("Content-length", str(size)),
-            ("Cache-Control", 'public, max-age=22222222'),
-        ]
-        response.content = open(file_path, 'rb')
-        response.type = "file"
-    else:
-        response.status = "404 NOT FOUND"
-        response.content = "File not found!"
-        response.type = "plaintext"
-    return response
+    return serve_file(file_path)
+    
 
 def _hash(s):
     m = hashlib.md5()
@@ -431,7 +454,12 @@ def wsgi_app(environ, start_response):
             if handler:
                 response = handler(params)
             else:
-                response = file_handler(path)
+                response = static_file_handler(path)
+        except OSError, e:
+            response = Response()
+            response.status = '404 NOT FOUND'
+            response.content = '404 File not found'
+            response.type = 'plaintext'
         except Exception, e:
             response = Response()
             full_tb = traceback.extract_tb(sys.exc_info()[2])
@@ -446,8 +474,8 @@ def wsgi_app(environ, start_response):
             log(json.dumps(report, indent=1))
             response.content = report
             response.status = '500 ' + str(e)
-    response.headers.append(('Access-Control-Allow-Origin', '*'))
-    response.headers.append(('Access-Control-Allow-Headers', 'Content-Type'))
+    response.set_header('Access-Control-Allow-Origin', '*')
+    response.set_header('Access-Control-Allow-Headers', 'Content-Type')
     start_response(response.status, response.headers)
     return response.output
 
