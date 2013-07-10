@@ -70,7 +70,7 @@ class Response(object):
             s = pico.to_json(self.content, self.json_dumpers)
             if self.callback:
                 s = self.callback + '(' + s + ')'
-            return s
+            return [s,]
 
 def main():
     opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port=", "no-reload"])
