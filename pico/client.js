@@ -599,7 +599,7 @@ var pico = (function(){
     pico.json = {
         dumps: function(obj){
             return JSON.stringify(obj, function(k, v) {
-                return typeof v === 'object' && typeof v.json === 'string' ? JSON.parse(v.json) : v;   
+                return v && typeof v === 'object' && typeof v.json === 'string' ? JSON.parse(v.json) : v;   
             });
         },
         loads: JSON.parse
