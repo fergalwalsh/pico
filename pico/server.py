@@ -338,6 +338,26 @@ def log(*args):
     if not SILENT:
         print(args[0] if len(args) == 1 else args)
 
+def extract_params(environ):
+    params = {}
+    # if parameters are in the URL, we extract them first
+    get_params = environ['QUERY_STRING']
+    if get_params == '' and '/call/' in environ['PATH_INFO']:
+        path = environ['PATH_INFO'].split('/')
+        environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
+        params.update(cgi.parse_qs(path[-1]))
+
+    # now get GET and POST data
+    fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
+    for name in fields:
+        if fields[name].filename:
+            params[name] = fields[name].file
+        elif type(fields[name]) == list and fields[name][0].file:
+            params[name] = [v.file for v in fields[name]]
+        else:
+            params[name] = fields[name].value
+    return params
+
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
@@ -346,23 +366,7 @@ def wsgi_app(environ, start_response):
         response = Response()
         response.status = "200 OK"
     else:
-        params = {}
-        # if parameters are in the URL, we extract them first
-        get_params = environ['QUERY_STRING']
-        if get_params == '' and '/call/' in environ['PATH_INFO']:
-            path = environ['PATH_INFO'].split('/')
-            environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
-            environ['QUERY_STRING'] = path[-1]
-
-        # now get GET and POST data
-        fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
-        for name in fields:
-            if fields[name].filename:
-                params[name] = fields[name].file
-            elif type(fields[name]) == list and fields[name][0].file:
-                params[name] = [v.file for v in fields[name]]
-            else:
-                params[name] = fields[name].value
+        params = extract_params(environ)
         log('------')
         try:
             path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
