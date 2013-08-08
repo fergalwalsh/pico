@@ -1,7 +1,9 @@
-String.prototype.contains = function (sub){return(this.indexOf(sub)!=-1);};
 if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
-
 var pico = (function(){
+
+    function contains (str, sub){
+        return(str.indexOf(sub)!=-1);
+    };
 
     function urlencode (params){
         return map(function(k){return k + "=" +  encodeURIComponent(params[k])}, keys(params)).join('&');
@@ -42,7 +44,7 @@ var pico = (function(){
     }
     
     /**
-     * Returns true if `callback` returns true for any propery
+     * Returns true if `callback` returns true for any property
      * else false
      */
     function some(object, callback, thisObject) {
@@ -193,7 +195,7 @@ var pico = (function(){
 
     pico.exception = function(e){
         if(e.exception){
-            if(e.exception.contains("password") || e.exception.contains("not authorised")){
+            if(contains(e.exception, "password") || contains(e.exception, "not authorised")){
                 var f = function(username, password){
                     _username = username;
                     _password = hex_md5(password);
@@ -204,7 +206,7 @@ var pico = (function(){
                     });
                 }
                 pico.on_authentication_failure(e, f);
-            }else if(e.exception.contains("nonce")){
+            }else if(contains(e.exception, "nonce")){
                 var td = e.exception.split(':')[1];
                 pico.td += parseInt(td);
                 var x = inprogress_auth_gets[e.params._key];
@@ -327,7 +329,7 @@ var pico = (function(){
 
     pico.get = function(url, data, callback)
     {
-        if(document.getElementsByTagName("body").length > 0 && !url.contains('.js') && !url.contains('.css')){
+        if(document.getElementsByTagName("body").length > 0 && !contains(url, '.js') && !contains(url, '.css')){
             return pico.xhr(url, data, callback);
         }
         if(typeof(data) == "function" && typeof(callback) == "undefined"){
@@ -488,7 +490,7 @@ var pico = (function(){
             params['_key'] = hex_md5(_password + params['_nonce']);
         }
         url += 'call/';
-        if(!(pico.cache.enabled && use_cache) && !url.contains('?')){
+        if(!(pico.cache.enabled && use_cache) && !contains(url, '?')){
             url += '?'
         }
         url += urlencode(params);
