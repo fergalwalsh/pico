@@ -21,6 +21,7 @@ import SocketServer
 import threading
 
 import pico
+import pico.modules
 
 path = (os.path.dirname(__file__) or '.') + '/'
 _server_process = None
@@ -244,7 +245,7 @@ def call(params):
         except OSError:
             pass
     if not response.content:
-        module = load_module(module_name)
+        module = pico.modules.load(module_name, RELOAD)
         authenticated_user = authenticate(params, module)
         # parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
         if class_name:
@@ -272,87 +273,11 @@ def call(params):
     response.callback = callback
     return response
 
-def load(module_name):
-    module = load_module(module_name)
-    return module_dict(module)
-
-def module_dict(module):
-    module_dict = {}
-    pico_exports = getattr(module, 'pico_exports', None)
-    members = inspect.getmembers(module)
-    def function_filter(x):
-        (name, f) = x
-        return inspect.isfunction(f) \
-        and (pico_exports == None or name in pico_exports) \
-        and f.__module__ == module.__name__ \
-        and not name.startswith('_') \
-        and not hasattr(f, 'private')
-
-    def class_filter(x):
-        (name, f) = x
-        return inspect.isclass(f) \
-        and issubclass(f, pico.Pico) \
-        and (not pico_exports or name in pico_exports) \
-        and f.__module__ == module.__name__ \
-        and not name.startswith('_') \
-        and not hasattr(f, 'private')
-    class_defs = dict((name, class_dict(cls)) for (name, cls) in filter(class_filter, members))
-    function_defs = dict((name, func_dict(f)) for (name, f) in filter(function_filter, members))
-    module_dict.update(class_defs)
-    module_dict.update(function_defs)
-    module_dict['__doc__'] = module.__doc__
-    return module_dict
-
-def class_dict(cls):
-    def method_filter(x):
-        (name, f) = x
-        return inspect.ismethod(f) \
-        and (not name.startswith('_') or name == '__init__') \
-        and not hasattr(f, 'private')
-    class_dict = {'__class__': cls.__name__}
-    methods = filter(method_filter, inspect.getmembers(cls))
-    class_dict.update(dict((name, func_dict(f)) for (name, f) in methods))
-    class_dict['__doc__'] = cls.__doc__
-    return class_dict
-
-def func_dict(f):
-    func_dict = {}
-    func_dict['cache'] = ((hasattr(f, 'cacheable') and f.cacheable))
-    func_dict['stream'] = ((hasattr(f, 'stream') and f.stream))
-    func_dict['protected'] = ((hasattr(f, 'protected') and f.protected))
-    a = inspect.getargspec(f)
-    args = list(reversed(map(None, reversed(a.args), reversed(a.defaults or [None]))))
-    func_dict['args'] = filter(lambda x: x[0] and not (x[0].startswith('pico_') or x[0] == 'self'), args)
-    func_dict['doc'] = f.__doc__
-    return func_dict
-
-def error(params):
-    return Response(content="Error 404. Bad URl", type="plaintext")
-
-def pico_js(params):
-    return serve_file(path + 'client.js')
-
-def load_module(module_name):
-    if module_name == 'pico':
-        return sys.modules['pico']
-    if module_name == 'pico.server':
-        if module_name in sys.modules:
-            return sys.modules[module_name]
-        else:
-            return sys.modules[__name__]
-    modules_path = './'
-    if module_name in sys.modules and RELOAD: 
-        del sys.modules[module_name]
-    if not sys.path.__contains__(modules_path):
-        sys.path.insert(0, modules_path)
-    m = __import__(module_name)
-    m = sys.modules[module_name]
-    if RELOAD:
-        m = reload(m)
-        log("Module %s loaded"%module_name)
-    if not (hasattr(m, 'pico') and m.pico.magic == pico.magic):
-        raise ImportError('This module has not imported pico and therefore is not picoable!')
-    return m
+def _load(module_name, params={}):
+    params['_module'] = 'pico.modules'
+    params['_function'] = 'load'
+    params['module_name'] = '"%s"'%module_name
+    return call(params)
 
 def serve_file(file_path):
     response = Response()
