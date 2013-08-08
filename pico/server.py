@@ -21,8 +21,9 @@ import SocketServer
 import threading
 
 import pico
+import pico.modules
 
-path = (os.path.dirname(__file__) or '.') + '/'
+pico_path = (os.path.dirname(__file__) or '.') + '/'
 _server_process = None
 pico_exports = []
 
@@ -99,6 +100,8 @@ class Response(object):
             s = [s,]
             self._output = s
             return s
+
+class APIError(Exception): pass
 
 def main():
     opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port=", "no-reload"])
@@ -244,7 +247,7 @@ def call(params):
         except OSError:
             pass
     if not response.content:
-        module = load_module(module_name)
+        module = pico.modules.load(module_name, RELOAD)
         authenticated_user = authenticate(params, module)
         # parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
         if class_name:
@@ -272,87 +275,11 @@ def call(params):
     response.callback = callback
     return response
 
-def load(module_name):
-    module = load_module(module_name)
-    return module_dict(module)
-
-def module_dict(module):
-    module_dict = {}
-    pico_exports = getattr(module, 'pico_exports', None)
-    members = inspect.getmembers(module)
-    def function_filter(x):
-        (name, f) = x
-        return inspect.isfunction(f) \
-        and (pico_exports == None or name in pico_exports) \
-        and f.__module__ == module.__name__ \
-        and not name.startswith('_') \
-        and not hasattr(f, 'private')
-
-    def class_filter(x):
-        (name, f) = x
-        return inspect.isclass(f) \
-        and issubclass(f, pico.Pico) \
-        and (not pico_exports or name in pico_exports) \
-        and f.__module__ == module.__name__ \
-        and not name.startswith('_') \
-        and not hasattr(f, 'private')
-    class_defs = dict((name, class_dict(cls)) for (name, cls) in filter(class_filter, members))
-    function_defs = dict((name, func_dict(f)) for (name, f) in filter(function_filter, members))
-    module_dict.update(class_defs)
-    module_dict.update(function_defs)
-    module_dict['__doc__'] = module.__doc__
-    return module_dict
-
-def class_dict(cls):
-    def method_filter(x):
-        (name, f) = x
-        return inspect.ismethod(f) \
-        and (not name.startswith('_') or name == '__init__') \
-        and not hasattr(f, 'private')
-    class_dict = {'__class__': cls.__name__}
-    methods = filter(method_filter, inspect.getmembers(cls))
-    class_dict.update(dict((name, func_dict(f)) for (name, f) in methods))
-    class_dict['__doc__'] = cls.__doc__
-    return class_dict
-
-def func_dict(f):
-    func_dict = {}
-    func_dict['cache'] = ((hasattr(f, 'cacheable') and f.cacheable))
-    func_dict['stream'] = ((hasattr(f, 'stream') and f.stream))
-    func_dict['protected'] = ((hasattr(f, 'protected') and f.protected))
-    a = inspect.getargspec(f)
-    args = list(reversed(map(None, reversed(a.args), reversed(a.defaults or [None]))))
-    func_dict['args'] = filter(lambda x: x[0] and not (x[0].startswith('pico_') or x[0] == 'self'), args)
-    func_dict['doc'] = f.__doc__
-    return func_dict
-
-def error(params):
-    return Response(content="Error 404. Bad URl", type="plaintext")
-
-def pico_js(params):
-    return serve_file(path + 'client.js')
-
-def load_module(module_name):
-    if module_name == 'pico':
-        return sys.modules['pico']
-    if module_name == 'pico.server':
-        if module_name in sys.modules:
-            return sys.modules[module_name]
-        else:
-            return sys.modules[__name__]
-    modules_path = './'
-    if module_name in sys.modules and RELOAD: 
-        del sys.modules[module_name]
-    if not sys.path.__contains__(modules_path):
-        sys.path.insert(0, modules_path)
-    m = __import__(module_name)
-    m = sys.modules[module_name]
-    if RELOAD:
-        m = reload(m)
-        log("Module %s loaded"%module_name)
-    if not (hasattr(m, 'pico') and m.pico.magic == pico.magic):
-        raise ImportError('This module has not imported pico and therefore is not picoable!')
-    return m
+def _load(module_name, params={}):
+    params['_module'] = 'pico.modules'
+    params['_function'] = 'load'
+    params['module_name'] = '"%s"'%module_name
+    return call(params)
 
 def serve_file(file_path):
     response = Response()
@@ -413,6 +340,78 @@ def log(*args):
     if not SILENT:
         print(args[0] if len(args) == 1 else args)
 
+def extract_params(environ):
+    params = {}
+    # if parameters are in the URL, we extract them first
+    get_params = environ['QUERY_STRING']
+    if get_params == '' and '/call/' in environ['PATH_INFO']:
+        path = environ['PATH_INFO'].split('/')
+        environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
+        params.update(cgi.parse_qs(path[-1]))
+
+    # now get GET and POST data
+    fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
+    for name in fields:
+        if fields[name].filename:
+            params[name] = fields[name].file
+        elif type(fields[name]) == list and fields[name][0].file:
+            params[name] = [v.file for v in fields[name]]
+        else:
+            params[name] = fields[name].value
+    return params
+
+def generate_exception_report(e, path, params):
+    response = Response()
+    full_tb = traceback.extract_tb(sys.exc_info()[2])
+    tb_str = ''
+    for tb in full_tb:
+        tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
+    report = {}
+    report['exception'] = str(e)
+    report['traceback'] = tb_str
+    report['url'] = path.replace('/pico/', '/')
+    report['params'] = dict([(k, repr(params[k])[:100] + ('...' if len(repr(params[k])) > 100 else '')) for k in params])
+    log(json.dumps(report, indent=1))
+    response.content = report
+    response.status = '500 ' + str(e)
+    return response
+
+
+def handle_api_v1(path, params):
+    if '/module/' in path:
+        module_name = path.split('/')[2]
+        return _load(module_name, params)
+    elif '/call/' in path:
+        return call(params)
+    elif '/authenticate/' in path:
+        return authenticate(params)
+    raise APIError()
+
+def handle_api_v2(path, params):
+    # nice urls:
+    #   /module_name/
+    #   /module_name/function_name/
+    parts = [p for p in path.split('/') if p]
+    if len(parts) > 1:
+        params['_module'] = parts[0]
+        params['_function'] = parts[1]
+        return call(params)
+    else:
+        return _load(parts[0], params)
+    raise APIError()
+
+def handle_pico_js(path, params):
+    if path == '/pico.js' or path == '/client.js':
+        return serve_file(pico_path + 'client.js')
+    raise APIError()
+
+def not_found_error(path):
+    response = Response()
+    response.status = '404 NOT FOUND'
+    response.content = '404 File not found'
+    response.type = 'plaintext'
+    return response
+
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
@@ -421,59 +420,31 @@ def wsgi_app(environ, start_response):
         response = Response()
         response.status = "200 OK"
     else:
-        params = {}
-        # if parameters are in the URL, we extract them first
-        get_params = environ['QUERY_STRING']
-        if get_params == '' and '/call/' in environ['PATH_INFO']:
-            path = environ['PATH_INFO'].split('/')
-            environ['PATH_INFO'] = '/'.join(path[:-1]) + '/'
-            environ['QUERY_STRING'] = path[-1]
-
-        # now get GET and POST data
-        fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
-        for name in fields:
-            if fields[name].filename:
-                params[name] = fields[name].file
-            elif type(fields[name]) == list and fields[name][0].file:
-                params[name] = [v.file for v in fields[name]]
-            else:
-                params[name] = fields[name].value
+        params = extract_params(environ)
         log('------')
+        path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
+        if BASE_PATH: path = path.split(BASE_PATH)[1]
+        log(path)
         try:
-            path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
-            if BASE_PATH: path = path.split(BASE_PATH)[1]
-            path = path.replace('/pico/', '/')
-            if '/module/' in path:
-                module_name = path.split('/')[2]
-                path = '/call/'
-                params['_module'] = 'pico.server'
-                params['_function'] = 'load'
-                params['module_name'] = '"%s"'%module_name
-            log(path)
-            handler = url_handlers.get(path, None)
-            if handler:
-                response = handler(params)
-            else:
-                response = static_file_handler(path)
-        except OSError, e:
-            response = Response()
-            response.status = '404 NOT FOUND'
-            response.content = '404 File not found'
-            response.type = 'plaintext'
+            if '/pico/' in path:
+                path = path.replace('/pico/', '/')
+                try:
+                    response = handle_api_v1(path, params)
+                except APIError:
+                    try:
+                        response = handle_pico_js(path, params)
+                    except APIError:
+                        try:
+                            response = handle_api_v2(path, params)
+                        except APIError:
+                            response = not_found_error(path)
+            else:           
+                try:
+                    response = static_file_handler(path)
+                except OSError, e:
+                    response = not_found_error(path)
         except Exception, e:
-            response = Response()
-            full_tb = traceback.extract_tb(sys.exc_info()[2])
-            tb_str = ''
-            for tb in full_tb:
-                tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
-            report = {}
-            report['exception'] = str(e)
-            report['traceback'] = tb_str
-            report['url'] = path.replace('/pico/', '/')
-            report['params'] = dict([(k, repr(params[k])[:100] + ('...' if len(repr(params[k])) > 100 else '')) for k in params])
-            log(json.dumps(report, indent=1))
-            response.content = report
-            response.status = '500 ' + str(e)
+            response = generate_exception_report(e, path, params)
     response.set_header('Access-Control-Allow-Origin', '*')
     response.set_header('Access-Control-Allow-Headers', 'Content-Type')
     start_response(response.status, response.headers)
@@ -482,12 +453,6 @@ def wsgi_app(environ, start_response):
 
 CACHE_PATH = './cache/'
 BASE_PATH = ''
-url_handlers = {
-    '/call/': call,
-    '/authenticate/': authenticate,
-    '/pico.js': pico_js,
-    '/client.js': pico_js
-}
 STATIC_URL_MAP = [
 ('^/(.*)$', './'),
 ]

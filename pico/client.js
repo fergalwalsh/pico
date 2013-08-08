@@ -1,7 +1,9 @@
-String.prototype.contains = function (sub){return(this.indexOf(sub)!=-1);};
 if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
-
 var pico = (function(){
+
+    function contains (str, sub){
+        return(str.indexOf(sub)!=-1);
+    };
 
     function urlencode (params){
         return map(function(k){return k + "=" +  encodeURIComponent(params[k])}, keys(params)).join('&');
@@ -42,7 +44,7 @@ var pico = (function(){
     }
     
     /**
-     * Returns true if `callback` returns true for any propery
+     * Returns true if `callback` returns true for any property
      * else false
      */
     function some(object, callback, thisObject) {
@@ -127,44 +129,62 @@ var pico = (function(){
         return proxy;
     }
 
-    function create_class_proxy(definition, class_name, module_name) {
+    function create_class_proxy(definition, class_name, module_proxy) {
         var doc = definition['__doc__']
-        delete definition['__doc__'];
-        var args = map(function(x){return x[0];}, definition.__init__.args),
-            Constr = function() {
-                this.__args__ = [].slice.call(arguments);
-                this.__module__ = module_name;
-                this.__class__ = class_name;
-                this.__doc__ = doc;
-            };
+        var args = map(function(x){return x[0];}, definition.__init__.args);
 
+        var ProxyClass = function() {
+            this.__args__ = [].slice.call(arguments);
+            this.__module__ = module_proxy;
+            this.__class__ = class_name;
+            this.__doc__ = doc;
+            for(var i=0; i < args.length; i++){
+                this[args[i]] = this.__args__[i];
+            }
+        };
+        
+        ProxyClass.fromJSON = function (obj){
+            var that = new ProxyClass();
+            Object.keys(obj).forEach(function(k){
+                if(k.substr(0,2) != "__") that[k] = obj[k];
+            });
+            return that;
+        };
 
-        for(var func_name in definition) {
-            if(func_name.charAt(0) !== '_') {
+        ProxyClass.prototype.toJSON = function (){
+            var obj = {};
+            var that = this;
+            Object.keys(this).forEach(function(k){
+                if(k.substr(0,2) != "__") obj[k] = that[k];
+            });
+            return obj;
+        };
+
+        for(var i in definition.functions){
+            var func_def = definition.functions[i];
+            var func_name = func_def.name;
                 (function(func_name, definition) {
                     var proxy_func;
-
-                    Constr.prototype[func_name] = function() {
-                        if(!proxy_func) {
+                    ProxyClass.prototype[func_name] = function() {
+                        if (!proxy_func){
                             proxy_func = create_function_proxy(definition, func_name, this);
                         }
                         return proxy_func.apply(this, arguments); 
                     };
-                }(func_name, definition[func_name]));
-            }
+                }(func_name, func_def));
         }
 
         // generate doc string
-        Constr.__doc__ =  "function(" + args.join(', ') + ', callback)';
+        ProxyClass.__doc__ =  "function(" + args.join(', ') + ')';
         if(definition.doc) {
-            Constr.__doc__ =  [Constr.__doc__, definition.doc].join('\n');
+            ProxyClass.__doc__ =  [ProxyClass.__doc__, definition.doc].join('\n');
         }
 
-        Constr.toString = function() {
+        ProxyClass.toString = function() {
             return this.__doc__;
         };
 
-        return Constr;
+        return ProxyClass;
     }
 
 
@@ -182,6 +202,7 @@ var pico = (function(){
     };
     pico.debug = false;
     pico.td = 0;
+    pico.tokens = {};
 
     pico.on_error = function(e){
         console.error(e);
@@ -193,7 +214,7 @@ var pico = (function(){
 
     pico.exception = function(e){
         if(e.exception){
-            if(e.exception.contains("password") || e.exception.contains("not authorised")){
+            if(contains(e.exception, "password") || contains(e.exception, "not authorised")){
                 var f = function(username, password){
                     _username = username;
                     _password = hex_md5(password);
@@ -204,7 +225,7 @@ var pico = (function(){
                     });
                 }
                 pico.on_authentication_failure(e, f);
-            }else if(e.exception.contains("nonce")){
+            }else if(contains(e.exception, "nonce")){
                 var td = e.exception.split(':')[1];
                 pico.td += parseInt(td);
                 var x = inprogress_auth_gets[e.params._key];
@@ -212,6 +233,9 @@ var pico = (function(){
                 def.done(function() {
                     x.deferred.resolve.apply(x.deferred, arguments);
                 });
+            }
+            else{
+                pico.on_error(e);
             }
         }
         else{
@@ -229,9 +253,11 @@ var pico = (function(){
     
     pico.xhr = function(url, data, callback)
     {
+        var allow_chunked = true
         if(data == "response:text"){
             var parse = function(d){return d};
             data = undefined;
+            allow_chunked = false
         }
         else{
             var parse = JSON.parse;
@@ -285,7 +311,7 @@ var pico = (function(){
         xhr.resonseType="text";
         xhr._characters_read = 0;
         xhr.onreadystatechange = function(){
-            if(this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
+            if(allow_chunked && this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
                 var i = this.response.indexOf("\n", this._characters_read + 1);
                 while (i > -1){
                     var response = this.response.substring(this._characters_read, i);
@@ -327,7 +353,7 @@ var pico = (function(){
 
     pico.get = function(url, data, callback)
     {
-        if(document.getElementsByTagName("body").length > 0 && !url.contains('.js') && !url.contains('.css')){
+        if(document.getElementsByTagName("body").length > 0 && !contains(url, '.js') && !contains(url, '.css')){
             return pico.xhr(url, data, callback);
         }
         if(typeof(data) == "function" && typeof(callback) == "undefined"){
@@ -469,17 +495,17 @@ var pico = (function(){
             }
         }
         var params = {};
+        var module = object;
         if('__class__' in object){
-            params['_module'] = object.__module__;
+            module = object.__module__;
             params['_class'] = object.__class__;
             params['_init'] = JSON.stringify(object.__args__);
-            var url = window[object.__module__].__url__;
+            params['_init'] = JSON.stringify(object);
         }
-        else{
-            params['_module'] = object.__name__;
-            var url = object.__url__;
-        }
-        params['_function'] = function_name;
+        // params['_module'] = module.__name__;
+        params['_tokens'] = pico.json.dumps(pico.tokens || {});
+        var url = module.__url__ + module.__name__ + '/' + function_name + '/'
+        // params['_function'] = function_name;
         if(use_auth){
             var now = new Date();
             var time = Math.round((now.getTime() - now.getTimezoneOffset() * 60000) / 1000)
@@ -487,8 +513,8 @@ var pico = (function(){
             params['_nonce'] = time + (pico.td || 0);
             params['_key'] = hex_md5(_password + params['_nonce']);
         }
-        url += 'call/';
-        if(!(pico.cache.enabled && use_cache) && !url.contains('?')){
+        // url += 'call/';
+        if(!(pico.cache.enabled && use_cache) && !contains(url, '?')){
             url += '?'
         }
         url += urlencode(params);
@@ -511,42 +537,53 @@ var pico = (function(){
     pico.load_as = function(module, alias, result_handler){
 
         if(module.substr(0, 7) != 'http://'){
-            var url = pico.url + 'module/' + module;
+            var url = pico.url + module;
         }
         else{
             var url = module;
-            var s = module.split('/module/');
+            var s = module.split('/pico/');
             var module = s[s.length-1].replace('/', '');
         }
         if(alias == undefined){
             alias = module;
         }
         var callback = function(result, url){
-            var ns = create_namespace(alias);
-            for(var k in ns){
-                delete ns[k];
-            }
-            ns.__name__ = module;
-            ns.__alias__ = alias;
-            ns.__url__ = url.substr(0,url.indexOf("module/"));
-            ns.__doc__ = result['__doc__']
-            delete result['__doc__'];
-            // debug
-            test = result;
-
-            for(var func_name in result){
-                if(typeof(result[func_name].__class__) != "undefined"){ // we have a class
-                    ns[func_name] = create_class_proxy(result[func_name], func_name, module);
-                }
-                else{
-                    ns[func_name] = create_function_proxy(result[func_name], func_name, ns);
-                }
-            }
+            url = url.substr(0,url.indexOf("module/"));
+            var module_proxy = pico.module_proxy(result, module, alias, url);
             if(result_handler) {
-                result_handler(ns);
+                result_handler(module_proxy);
             }
         };
         return pico.get(url, undefined, callback)
+    };
+
+    pico.module_proxy = function(definition, module_name, alias, url){
+        if(alias == undefined){
+            alias = module_name;
+        }
+        var ns = create_namespace(alias);
+        for(var k in ns){
+            delete ns[k];
+        }
+        ns.__name__ = module_name;
+        ns.__alias__ = alias;
+        ns.__url__ = url || pico.url;
+        ns.__doc__ = definition['__doc__']
+        for(var i in definition.functions){
+            var func_def = definition.functions[i];
+            var func_name = func_def.name;
+            ns[func_name] = create_function_proxy(func_def, func_name, ns);
+        }
+        for(var i in definition.classes){
+            var class_def = definition.classes[i];
+            var class_name = class_def.name;
+            ns[class_name] = create_class_proxy(class_def, class_name, ns);
+        }
+        return ns;
+    };
+
+    pico.set_token = function(key, value){
+        pico.tokens[key] = value;
     };
 
     pico.authenticate = function(username, password, callback){
@@ -566,7 +603,7 @@ var pico = (function(){
     pico.json = {
         dumps: function(obj){
             return JSON.stringify(obj, function(k, v) {
-                return typeof v === 'object' && typeof v.json === 'string' ? JSON.parse(v.json) : v;   
+                return v && typeof v === 'object' && typeof v.json === 'string' ? JSON.parse(v.json) : v;   
             });
         },
         loads: JSON.parse
