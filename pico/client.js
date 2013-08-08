@@ -202,6 +202,7 @@ var pico = (function(){
     };
     pico.debug = false;
     pico.td = 0;
+    pico.tokens = {};
 
     pico.on_error = function(e){
         console.error(e);
