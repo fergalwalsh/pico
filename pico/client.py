@@ -61,9 +61,9 @@ def _stream(url, encoded_args=""):
 def _call_function(module, function, args, stream=False): 
     for k in args:
         args[k] = pico.to_json(args[k])
-    args['_function'] = function
-    args['_module'] = module
-    return get(url + 'call/', args, stream)
+    # args['_function'] = function
+    # args['_module'] = module
+    return get(url + '%s/%s/'%(module, function), args, stream)
 
 def authenticate(username, password):
     """ 
@@ -104,21 +104,26 @@ def load(module_name):
 
     example = pico.client.load("example")
     """
-    module_dict = _call_function('pico.server', 'load', locals())
+    if module_name.startswith('http://'):
+        pico_url, module_name = module_name.split('/pico/')
+        global url
+        url = pico_url + '/pico/'
+    module_dict = get(url + module_name)
     module = imp.new_module(module_name)
     module.__doc__ = module_dict['__doc__']
-    del module_dict['__doc__']
-    for k in module_dict:
-        args = module_dict[k]['args']
+    functions = module_dict['functions']
+    for function_def in functions:
+        name = function_def['name']
+        args = function_def['args']
         args_string = ', '.join(["%s=%s"%(arg, json.dumps(default).replace("null", "None")) for arg, default in args if arg != None])
-        stream = module_dict[k]['stream']
-        docstring = module_dict[k]['doc']
+        stream = function_def['stream']
+        docstring = function_def['doc']
         exec("""
 def f(%s):
     \"\"\" %s \"\"\"
     return _call_function('%s', '%s', locals(), %s)
-"""%(args_string, docstring, module_name, k, stream))
-        setattr(module, k, f)
+"""%(args_string, docstring, module_name, name, stream))
+        setattr(module, name, f)
     return module
 
 def _hash(s):
