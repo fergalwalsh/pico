@@ -447,6 +447,7 @@ def wsgi_app(environ, start_response):
             response = generate_exception_report(e, path, params)
     response.set_header('Access-Control-Allow-Origin', '*')
     response.set_header('Access-Control-Allow-Headers', 'Content-Type')
+    response.set_header('Access-Control-Expose-Headers', 'Transfer-Encoding')
     start_response(response.status, response.headers)
     return response.output
 
