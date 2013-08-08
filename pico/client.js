@@ -138,8 +138,27 @@ var pico = (function(){
             this.__module__ = module_proxy;
             this.__class__ = class_name;
             this.__doc__ = doc;
+            for(var i=0; i < args.length; i++){
+                this[args[i]] = this.__args__[i];
+            }
+        };
+        
+        ProxyClass.fromJSON = function (obj){
+            var that = new ProxyClass();
+            Object.keys(obj).forEach(function(k){
+                if(k.substr(0,2) != "__") that[k] = obj[k];
+            });
+            return that;
         };
 
+        ProxyClass.prototype.toJSON = function (){
+            var obj = {};
+            var that = this;
+            Object.keys(this).forEach(function(k){
+                if(k.substr(0,2) != "__") obj[k] = that[k];
+            });
+            return obj;
+        };
 
         for(var i in definition.functions){
             var func_def = definition.functions[i];
