@@ -48,6 +48,16 @@ class Pico(object):
     def __init__(self):
         pass
     
+class object(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    @property
+    def json(self):
+        return to_json(self.__dict__)
+
+    def __str__(self):
+        return self.json
     
 
 class JSONString(str):
@@ -56,11 +66,9 @@ class JSONString(str):
 
 def convert_keys(obj):
     if type(obj) == dict: # convert non string keys to strings
-        for k in obj:
-            convert_keys(obj[k])
-            if not isinstance(k, basestring):
-                obj[str(k)] = obj[k]
-                del obj[k]
+        return dict((str(k), convert_keys(obj[k])) for k in obj)
+    else:
+        return obj
 
 
 def to_json(obj, _json_dumpers = {}):
@@ -72,6 +80,11 @@ def to_json(obj, _json_dumpers = {}):
                 obj = _json_dumpers[type(obj)](obj)
                 convert_keys(obj)
                 return obj
+            for obj_type, dumper in _json_dumpers.iteritems():
+                if isinstance(obj, obj_type):
+                    return dumper(obj)
+            if hasattr(obj, 'as_json'):
+                return obj.as_json()
             if hasattr(obj, 'json'):
                 return json.loads(obj.json)
             elif hasattr(obj, 'tolist'):
@@ -87,7 +100,7 @@ def to_json(obj, _json_dumpers = {}):
     for k in json_dumpers:
         if k not in _json_dumpers:
             _json_dumpers[k] = json_dumpers[k]
-    convert_keys(obj)
+    obj = convert_keys(obj)
     s = json.dumps(obj, cls=Encoder, separators=(',',':'))
     return s
 
