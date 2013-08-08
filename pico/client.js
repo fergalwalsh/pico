@@ -166,7 +166,9 @@ var pico = (function(){
                 (function(func_name, definition) {
                     var proxy_func;
                     ProxyClass.prototype[func_name] = function() {
-                        proxy_func = create_function_proxy(definition, func_name, this);
+                        if (!proxy_func){
+                            proxy_func = create_function_proxy(definition, func_name, this);
+                        }
                         return proxy_func.apply(this, arguments); 
                     };
                 }(func_name, func_def));
