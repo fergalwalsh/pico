@@ -1,5 +1,9 @@
 if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
 var pico = (function(){
+    var pico = {
+        '__author__': 'Fergal Walsh',
+        '__version__': '1.2.0'
+    }
 
     function contains (str, sub){
         return(str.indexOf(sub)!=-1);
@@ -191,7 +195,6 @@ var pico = (function(){
     var _username, 
         _password,
         inprogress_auth_gets = {},
-        pico = {},
         scripts = document.getElementsByTagName("script"),
         src = scripts[scripts.length-1].src;
 

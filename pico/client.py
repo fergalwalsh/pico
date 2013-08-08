@@ -12,6 +12,9 @@ s = example.hello("Python")
 Use help(example.hello) or example.hello? as normal to check function parameters and docstrings.
 """
 
+__author__ = 'Fergal Walsh'
+__version__ = '1.2.0'
+
 import urllib
 import urllib2
 import json
