@@ -37,7 +37,7 @@ def get(url, args={}, stream=False):
     else:
         r =  urllib.urlopen(url, encoded_args).read()
         data = json.loads(r)
-        if 'exception' in data:
+        if type(data) == dict and 'exception' in data:
             raise Exception(data['exception'])
         else:
             return data
