@@ -23,7 +23,7 @@ import threading
 import pico
 import pico.modules
 
-path = (os.path.dirname(__file__) or '.') + '/'
+pico_path = (os.path.dirname(__file__) or '.') + '/'
 _server_process = None
 pico_exports = []
 
@@ -100,6 +100,8 @@ class Response(object):
             s = [s,]
             self._output = s
             return s
+
+class APIError(Exception): pass
 
 def main():
     opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port=", "no-reload"])
@@ -374,6 +376,42 @@ def generate_exception_report(e, path, params):
     response.status = '500 ' + str(e)
     return response
 
+
+def handle_api_v1(path, params):
+    if '/module/' in path:
+        module_name = path.split('/')[2]
+        return _load(module_name, params)
+    elif '/call/' in path:
+        return call(params)
+    elif '/authenticate/' in path:
+        return authenticate(params)
+    raise APIError()
+
+def handle_api_v2(path, params):
+    # nice urls:
+    #   /module_name/
+    #   /module_name/function_name/
+    parts = [p for p in path.split('/') if p]
+    if len(parts) > 1:
+        params['_module'] = parts[0]
+        params['_function'] = parts[1]
+        return call(params)
+    else:
+        return _load(parts[0], params)
+    raise APIError()
+
+def handle_pico_js(path, params):
+    if path == '/pico.js' or path == '/client.js':
+        return serve_file(pico_path + 'client.js')
+    raise APIError()
+
+def not_found_error(path):
+    response = Response()
+    response.status = '404 NOT FOUND'
+    response.content = '404 File not found'
+    response.type = 'plaintext'
+    return response
+
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
@@ -384,27 +422,27 @@ def wsgi_app(environ, start_response):
     else:
         params = extract_params(environ)
         log('------')
+        path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
+        if BASE_PATH: path = path.split(BASE_PATH)[1]
+        log(path)
         try:
-            path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
-            if BASE_PATH: path = path.split(BASE_PATH)[1]
-            path = path.replace('/pico/', '/')
-            if '/module/' in path:
-                module_name = path.split('/')[2]
-                path = '/call/'
-                params['_module'] = 'pico.server'
-                params['_function'] = 'load'
-                params['module_name'] = '"%s"'%module_name
-            log(path)
-            handler = url_handlers.get(path, None)
-            if handler:
-                response = handler(params)
-            else:
-                response = static_file_handler(path)
-        except OSError, e:
-            response = Response()
-            response.status = '404 NOT FOUND'
-            response.content = '404 File not found'
-            response.type = 'plaintext'
+            if '/pico/' in path:
+                path = path.replace('/pico/', '/')
+                try:
+                    response = handle_api_v1(path, params)
+                except APIError:
+                    try:
+                        response = handle_pico_js(path, params)
+                    except APIError:
+                        try:
+                            response = handle_api_v2(path, params)
+                        except APIError:
+                            response = not_found_error(path)
+            else:           
+                try:
+                    response = static_file_handler(path)
+                except OSError, e:
+                    response = not_found_error(path)
         except Exception, e:
             response = generate_exception_report(e, path, params)
     response.set_header('Access-Control-Allow-Origin', '*')
@@ -415,12 +453,6 @@ def wsgi_app(environ, start_response):
 
 CACHE_PATH = './cache/'
 BASE_PATH = ''
-url_handlers = {
-    '/call/': call,
-    '/authenticate/': authenticate,
-    '/pico.js': pico_js,
-    '/client.js': pico_js
-}
 STATIC_URL_MAP = [
 ('^/(.*)$', './'),
 ]
