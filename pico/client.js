@@ -231,9 +231,11 @@ var pico = (function(){
     
     pico.xhr = function(url, data, callback)
     {
+        var allow_chunked = true
         if(data == "response:text"){
             var parse = function(d){return d};
             data = undefined;
+            allow_chunked = false
         }
         else{
             var parse = JSON.parse;
@@ -287,7 +289,7 @@ var pico = (function(){
         xhr.resonseType="text";
         xhr._characters_read = 0;
         xhr.onreadystatechange = function(){
-            if(this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
+            if(allow_chunked && this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
                 var i = this.response.indexOf("\n", this._characters_read + 1);
                 while (i > -1){
                     var response = this.response.substring(this._characters_read, i);
