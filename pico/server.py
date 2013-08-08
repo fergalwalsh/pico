@@ -358,6 +358,22 @@ def extract_params(environ):
             params[name] = fields[name].value
     return params
 
+def generate_exception_report(e, path, params):
+    response = Response()
+    full_tb = traceback.extract_tb(sys.exc_info()[2])
+    tb_str = ''
+    for tb in full_tb:
+        tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
+    report = {}
+    report['exception'] = str(e)
+    report['traceback'] = tb_str
+    report['url'] = path.replace('/pico/', '/')
+    report['params'] = dict([(k, repr(params[k])[:100] + ('...' if len(repr(params[k])) > 100 else '')) for k in params])
+    log(json.dumps(report, indent=1))
+    response.content = report
+    response.status = '500 ' + str(e)
+    return response
+
 def wsgi_app(environ, start_response):
     setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
@@ -390,19 +406,7 @@ def wsgi_app(environ, start_response):
             response.content = '404 File not found'
             response.type = 'plaintext'
         except Exception, e:
-            response = Response()
-            full_tb = traceback.extract_tb(sys.exc_info()[2])
-            tb_str = ''
-            for tb in full_tb:
-                tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
-            report = {}
-            report['exception'] = str(e)
-            report['traceback'] = tb_str
-            report['url'] = path.replace('/pico/', '/')
-            report['params'] = dict([(k, repr(params[k])[:100] + ('...' if len(repr(params[k])) > 100 else '')) for k in params])
-            log(json.dumps(report, indent=1))
-            response.content = report
-            response.status = '500 ' + str(e)
+            response = generate_exception_report(e, path, params)
     response.set_header('Access-Control-Allow-Origin', '*')
     response.set_header('Access-Control-Allow-Headers', 'Content-Type')
     start_response(response.status, response.headers)
