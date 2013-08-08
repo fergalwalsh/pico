@@ -310,7 +310,9 @@ var pico = (function(){
                 }
                 else{
                     if(this._characters_read == 0){
-                        deferred.reject(parse(this.response || this.responseText));
+                        if(this.response || this.responseText){
+                            deferred.reject(parse(this.response || this.responseText));
+                        }
                     }
                     else{
                         deferred.reject({'exception': "Exception in chunked response"});
