@@ -234,6 +234,9 @@ var pico = (function(){
                     x.deferred.resolve.apply(x.deferred, arguments);
                 });
             }
+            else{
+                pico.on_error(e);
+            }
         }
         else{
             pico.on_error(e);
