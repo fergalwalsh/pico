@@ -40,6 +40,8 @@ def class_dict(cls):
     class_dict = {'__class__': cls.__name__}
     class_dict['name'] = cls.__name__
     methods = filter(method_filter, inspect.getmembers(cls))
+    name, f = methods.pop(0)
+    class_dict['__init__'] = func_dict(f, name)
     class_dict['functions'] = [func_dict(f, name) for (name, f) in methods]
     class_dict['__doc__'] = cls.__doc__
     return class_dict
