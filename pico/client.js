@@ -2,7 +2,7 @@ if(!window.console) console = {'debug': function(x){}, 'log': function(x){}};
 var pico = (function(){
     var pico = {
         '__author__': 'Fergal Walsh',
-        '__version__': '1.2.0'
+        '__version__': '1.2.1'
     }
 
     function contains (str, sub){
