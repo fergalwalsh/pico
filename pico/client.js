@@ -94,7 +94,7 @@ var pico = (function(){
         return m;
     }
 
-    function create_function_proxy(definition, function_name, module) {
+    function create_function_proxy(definition, function_name, obj) {
         var args = map(function(x){return x[0];}, definition.args),
             use_cache = !!definition.cache,
             use_auth = !!definition["protected"];
@@ -108,7 +108,7 @@ var pico = (function(){
                    callback = arguments[arguments.length - 1];
             }
             
-            return pico[definition.stream ? 'stream' : 'call_function'](module, function_name, args_dict, callback, use_cache, use_auth);
+            return pico[definition.stream ? 'stream' : 'call_function'](obj, function_name, args_dict, callback, use_cache, use_auth);
         };
 
 
@@ -125,7 +125,7 @@ var pico = (function(){
         // helper function to get generate pico URL
         proxy.prepare_url = function() {
             var data = combine(args, arguments),
-                request = pico.prepare_request(module, function_name, data, use_cache, use_auth);
+                request = pico.prepare_request(obj, function_name, data, use_cache, use_auth);
 
             return request.base_url + '&' + urlencode(request.data);
         };
@@ -134,16 +134,20 @@ var pico = (function(){
     }
 
     function create_class_proxy(definition, class_name, module_proxy) {
-        var doc = definition['__doc__']
         var args = map(function(x){return x[0];}, definition.__init__.args);
 
         var ProxyClass = function() {
             this.__args__ = [].slice.call(arguments);
             this.__module__ = module_proxy;
             this.__class__ = class_name;
-            this.__doc__ = doc;
+            this.__doc__ = definition.__doc__;
             for(var i=0; i < args.length; i++){
                 this[args[i]] = this.__args__[i];
+            }
+            for(var i in definition.functions){
+                var func_def = definition.functions[i];
+                var func_name = func_def.name;
+                this[func_name] = create_function_proxy(func_def, func_name, this);
             }
         };
         
@@ -164,24 +168,10 @@ var pico = (function(){
             return obj;
         };
 
-        for(var i in definition.functions){
-            var func_def = definition.functions[i];
-            var func_name = func_def.name;
-                (function(func_name, definition) {
-                    var proxy_func;
-                    ProxyClass.prototype[func_name] = function() {
-                        if (!proxy_func){
-                            proxy_func = create_function_proxy(definition, func_name, this);
-                        }
-                        return proxy_func.apply(this, arguments); 
-                    };
-                }(func_name, func_def));
-        }
-
         // generate doc string
         ProxyClass.__doc__ =  "function(" + args.join(', ') + ')';
-        if(definition.doc) {
-            ProxyClass.__doc__ =  [ProxyClass.__doc__, definition.doc].join('\n');
+        if(definition.__doc__) {
+            ProxyClass.__doc__ =  [ProxyClass.__doc__, definition.__doc__].join('\n');
         }
 
         ProxyClass.toString = function() {
@@ -501,14 +491,13 @@ var pico = (function(){
         var module = object;
         if('__class__' in object){
             module = object.__module__;
-            params['_class'] = object.__class__;
             params['_init'] = JSON.stringify(object.__args__);
-            params['_init'] = JSON.stringify(object);
+            var url = module.__url__ + module.__name__ + '/' + object.__class__ + '/' + function_name + '/'
         }
-        // params['_module'] = module.__name__;
+        else{
+            var url = module.__url__ + module.__name__ + '/' + function_name + '/'
+        }
         params['_tokens'] = pico.json.dumps(pico.tokens || {});
-        var url = module.__url__ + module.__name__ + '/' + function_name + '/'
-        // params['_function'] = function_name;
         if(use_auth){
             var now = new Date();
             var time = Math.round((now.getTime() - now.getTimezoneOffset() * 60000) / 1000)
@@ -516,7 +505,6 @@ var pico = (function(){
             params['_nonce'] = time + (pico.td || 0);
             params['_key'] = hex_md5(_password + params['_nonce']);
         }
-        // url += 'call/';
         if(!(pico.cache.enabled && use_cache) && !contains(url, '?')){
             url += '?'
         }
