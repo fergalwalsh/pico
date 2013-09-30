@@ -391,15 +391,22 @@ def handle_api_v1(path, params):
 def handle_api_v2(path, params):
     # nice urls:
     #   /module_name/
-    #   /module_name/function_name/
+    #   /module_name/function_name/?foo=bar
+    #   /module_name/function_name/foo=bar # not implemented!
+    #   /module_name/class_name/function_name/
     parts = [p for p in path.split('/') if p]
-    if len(parts) > 1:
+    if len(parts) == 1:
+        return _load(parts[0], params)
+    elif len(parts) == 2:
         params['_module'] = parts[0]
         params['_function'] = parts[1]
         return call(params)
-    else:
-        return _load(parts[0], params)
-    raise APIError()
+    elif len(parts) == 3:
+        params['_module'] = parts[0]
+        params['_class'] = parts[1]
+        params['_function'] = parts[2]
+        return call(params)
+    raise APIError(path)
 
 def handle_pico_js(path, params):
     if path == '/pico.js' or path == '/client.js':
