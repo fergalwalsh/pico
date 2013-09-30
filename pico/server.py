@@ -70,8 +70,8 @@ class Response(object):
         if self._output:
             return self._output
         log(self.type)
-        if hasattr(self.content, 'read'):
-            self.type = "file"
+        if hasattr(self.content, 'read') and hasattr(self.content, 'seek') and hasattr(self.content, 'close'):
+            self.type = "file" # it looks like a duck... a file
         if self.type == "plaintext":
             return [self.content,]
         if self.type == "file":
