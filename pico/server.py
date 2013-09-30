@@ -125,9 +125,9 @@ def make_server(host='0.0.0.0', port=8800, multithreaded=False):
         class ThreadedTCPServer(SocketServer.ForkingMixIn, wsgiref.simple_server.WSGIServer):
             pass
         server = ThreadedTCPServer((host, port), wsgiref.simple_server.WSGIRequestHandler)
-        server.set_app(wsgi_app)
+        server.set_app(wsgi_dev_app)
     else:
-        server = wsgiref.simple_server.make_server(host, port, wsgi_app)
+        server = wsgiref.simple_server.make_server(host, port, wsgi_dev_app)
     def log_message(self, format, *args):
         if not SILENT:
             print(format%(args))
@@ -412,7 +412,7 @@ def not_found_error(path):
     response.type = 'plaintext'
     return response
 
-def wsgi_app(environ, start_response):
+def wsgi_app(environ, start_response, enable_static=False):
     setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
         # This is to hanle the preflight request for CORS.
@@ -438,11 +438,13 @@ def wsgi_app(environ, start_response):
                             response = handle_api_v2(path, params)
                         except APIError:
                             response = not_found_error(path)
-            else:           
+            elif enable_static:           
                 try:
                     response = static_file_handler(path)
                 except OSError, e:
                     response = not_found_error(path)
+            else:
+                response = not_found_error(path)
         except Exception, e:
             response = generate_exception_report(e, path, params)
     response.set_header('Access-Control-Allow-Origin', '*')
@@ -450,6 +452,10 @@ def wsgi_app(environ, start_response):
     response.set_header('Access-Control-Expose-Headers', 'Transfer-Encoding')
     start_response(response.status, response.headers)
     return response.output
+
+
+def wsgi_dev_app(environ, start_response):
+    return wsgi_app(environ, start_response, enable_static=True)
 
 
 CACHE_PATH = './cache/'
