@@ -11,6 +11,7 @@ __version__ = '1.2.0'
 import json
 import os
 import decimal
+import datetime
 
 path = (os.path.dirname(__file__) or '.') + '/'
 
@@ -89,6 +90,10 @@ def to_json(obj, _json_dumpers = {}):
                 return json.loads(obj.json)
             elif hasattr(obj, 'tolist'):
                 return obj.tolist()
+            elif hasattr(obj, 'read') and hasattr(obj, 'seek'):
+                s = obj.read()
+                obj.close()
+                return s
             elif hasattr(obj, '__iter__'):
                 return list(obj)
             else:
