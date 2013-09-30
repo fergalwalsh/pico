@@ -249,7 +249,8 @@ def call(params):
     if not response.content:
         module = pico.modules.load(module_name, RELOAD)
         authenticated_user = authenticate(params, module)
-        # parameters = map(lambda s: from_json(s, getattr(module, "json_loaders", [])), parameters)
+        for k in parameters:
+            parameters[k] = pico.from_json(parameters[k], getattr(module, "json_loaders", []))
         if class_name:
             init_args = map(lambda s: pico.from_json(s, getattr(module, "json_loaders", [])), init_args)
             response = call_method(module, class_name, function, parameters, init_args)
