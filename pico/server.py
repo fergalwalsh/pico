@@ -9,6 +9,7 @@ import getopt
 import re
 import SocketServer
 import threading
+from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
 try:
     import gevent
@@ -27,26 +28,31 @@ _server_process = None
 pico_exports = []
 
 
-class APIError(Exception): pass
+class APIError(Exception):
+    pass
+
 
 def main():
-    opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help", "port=", "no-reload"])
+    opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help",
+                                                      "port=",
+                                                      "no-reload"])
     args = dict(opts_args[0])
     port = int(args.get('--port', args.get('-p', 8800)))
     multithreaded = '-m' in args
     global RELOAD
     RELOAD = RELOAD and ('--no-reload' not in args)
-    host = '0.0.0.0' #'localhost'
-    server = make_server(host, port, multithreaded)
-    print("Serving on http://localhost:%s/"%port)
-    print("Using %s."%('multiple threads' if multithreaded else 'a single thread'))
+    host = '0.0.0.0'  # 'localhost'
+    server = _make_server(host, port, multithreaded)
+    print("Serving on http://%s:%s/" % (host, port))
+    if multithreaded:
+        print("Using multiple threads.")
     print("URL map: ")
-    print('\t' + '\n\t'.join(["%s : %s "%(url, path) for url, path in STATIC_URL_MAP]))
+    print('\t' + '\n\t'.join(["%s : %s " % x for x in STATIC_URL_MAP]))
     print("Hit CTRL-C to end")
     server.serve_forever()
 
 
-def make_server(host='0.0.0.0', port=8800, multithreaded=False):
+def _make_server(host='0.0.0.0', port=8800, multithreaded=False):
     if use_gevent:
         server = gevent.pywsgi.WSGIServer((host, port), wsgi_dev_app)
         global STREAMING
@@ -66,14 +72,16 @@ def make_server(host='0.0.0.0', port=8800, multithreaded=False):
         server.RequestHandlerClass.log_message = log_message
     return server
 
+
 def start_thread(host='127.0.0.1', port=8800, silent=True):
     global RELOAD, SILENT, _server_process
     RELOAD = False
     SILENT = silent
+
     class Server(threading.Thread):
         def __init__(self):
             super(Server, self).__init__()
-            self._server = make_server(host, port)
+            self._server = _make_server(host, port)
 
         def run(self):
             self._server.serve_forever()
@@ -85,8 +93,9 @@ def start_thread(host='127.0.0.1', port=8800, silent=True):
 
     _server_process = Server()
     _server_process.start()
-    print("Serving on http://%s:%s/"%(host, port))
+    print("Serving on http://%s:%s/" % (host, port))
     return _server_process
+
 
 def stop_thread():
     _server_process.stop()
@@ -205,7 +214,7 @@ def serve_file(file_path):
     response = Response()
     size = os.path.getsize(file_path)
     mimetype = mimetypes.guess_type(file_path)
-    response.set_header("Content-type", mimetype[0] or 'text/plain')  
+    response.set_header("Content-type", mimetype[0] or 'text/plain')
     response.set_header("Content-length", str(size))
     response.set_header("Cache-Control", 'public, max-age=22222222')
     response.content = open(file_path, 'rb')
@@ -220,7 +229,7 @@ def static_file_handler(path):
         if m:
             file_path = directory + ''.join(m.groups())
 
-    # if the path does not point to a valid file, try default file 
+    # if the path does not point to a valid file, try default file
     file_exists = os.path.isfile(file_path)
     if not file_exists:
         file_path = os.path.join(file_path, DEFAULT)
@@ -230,6 +239,7 @@ def static_file_handler(path):
 def log(*args):
     if not SILENT:
         print(args[0] if len(args) == 1 else args)
+
 
 def extract_params(environ):
     params = {}
@@ -244,24 +254,26 @@ def extract_params(environ):
     fields = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ)
     for name in fields:
         if fields[name].filename:
-            params[name] = fields[name].file
+            upload = fields[name]
+            params[name] = upload.file
         elif type(fields[name]) == list and fields[name][0].file:
             params[name] = [v.file for v in fields[name]]
         else:
             params[name] = fields[name].value
     return params
 
+
 def generate_exception_report(e, path, params):
     response = Response()
     full_tb = traceback.extract_tb(sys.exc_info()[2])
     tb_str = ''
     for tb in full_tb:
-        tb_str += "File '%s', line %s, in %s; "%(tb[0], tb[1], tb[2])
+        tb_str += "File '%s', line %s, in %s; " % (tb[0], tb[1], tb[2])
     report = {}
     report['exception'] = str(e)
     report['traceback'] = tb_str
     report['url'] = path.replace('/pico/', '/')
-    report['params'] = dict([(k, repr(params[k])[:100] + ('...' if len(repr(params[k])) > 100 else '')) for k in params])
+    report['params'] = dict([(k, _value_summary(params[k])) for k in params])
     log(json.dumps(report, indent=1))
     response.content = report
     response.status = '500 ' + str(e)
@@ -304,10 +316,12 @@ def handle_api_v2(path, params, environ):
         return call(params, environ)
     raise APIError(path)
 
+
 def handle_pico_js(path, params):
     if path == '/pico.js' or path == '/client.js':
         return serve_file(pico_path + 'client.js')
     raise APIError()
+
 
 def not_found_error(path):
     response = Response()
@@ -315,6 +329,7 @@ def not_found_error(path):
     response.content = '404 File not found'
     response.type = 'plaintext'
     return response
+
 
 def wsgi_app(environ, start_response, enable_static=False):
     if environ['REQUEST_METHOD'] == 'OPTIONS':
@@ -326,7 +341,8 @@ def wsgi_app(environ, start_response, enable_static=False):
         params = extract_params(environ)
         log('------')
         path = environ['PATH_INFO'].split(environ['HTTP_HOST'])[-1]
-        if BASE_PATH: path = path.split(BASE_PATH)[1]
+        if BASE_PATH:
+            path = path.split(BASE_PATH)[1]
         log(path)
         try:
             if '/pico/' in path:
@@ -363,7 +379,7 @@ def wsgi_dev_app(environ, start_response):
 CACHE_PATH = './cache/'
 BASE_PATH = ''
 STATIC_URL_MAP = [
-('^/(.*)$', './'),
+    ('^/(.*)$', './'),
 ]
 DEFAULT = 'index.html'
 RELOAD = True

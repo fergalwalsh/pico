@@ -16,17 +16,21 @@ import inspect
 
 path = (os.path.dirname(__file__) or '.') + '/'
 
+
 def cacheable(func):
     func.cacheable = True
     return func
+
 
 def stream(func):
     func.stream = True
     return func
 
+
 def private(func):
     func.private = True
     return func
+
 
 def protected(users=None, groups=None):
     def decorator(func):
@@ -68,7 +72,8 @@ def set_dummy_request(request):
 class Pico(object):
     def __init__(self):
         pass
-    
+
+
 class object(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -79,7 +84,7 @@ class object(object):
 
     def __str__(self):
         return self.json
-    
+
 
 class JSONString(str):
     def __init__(self, s):
@@ -175,22 +180,26 @@ class Response(object):
 
 
 def convert_keys(obj):
-    if type(obj) == dict: # convert non string keys to strings
+    if type(obj) == dict:  # convert non string keys to strings
         return dict((str(k), convert_keys(obj[k])) for k in obj)
     else:
         return obj
 
 
-def to_json(obj, _json_dumpers = {}):
+def to_json(obj, extra_json_dumpers=None):
     if isinstance(obj, JSONString):
         return obj
+    json_dumpers_ = dict(json_dumpers)
+    json_dumpers_.update(extra_json_dumpers or {})
+    obj = convert_keys(obj)
+
     class Encoder(json.JSONEncoder):
         def default(self, obj):
-            if type(obj) in _json_dumpers:
-                obj = _json_dumpers[type(obj)](obj)
+            if type(obj) in json_dumpers_:
+                obj = json_dumpers_[type(obj)](obj)
                 convert_keys(obj)
                 return obj
-            for obj_type, dumper in _json_dumpers.iteritems():
+            for obj_type, dumper in json_dumpers_.iteritems():
                 if isinstance(obj, obj_type):
                     return dumper(obj)
             if hasattr(obj, 'as_json'):
@@ -199,7 +208,7 @@ def to_json(obj, _json_dumpers = {}):
                 return json.loads(obj.json)
             elif hasattr(obj, 'tolist'):
                 return obj.tolist()
-            elif hasattr(obj, 'read') and hasattr(obj, 'seek'):
+            elif all(hasattr(obj, a) for a in ['read', 'seek', 'close']):
                 s = obj.read()
                 obj.close()
                 return s
@@ -207,25 +216,21 @@ def to_json(obj, _json_dumpers = {}):
                 return list(obj)
             else:
                 return str(obj)
-    
+
         def encode(self, obj):
             convert_keys(obj)
             return json.JSONEncoder.encode(self, obj)
-    for k in json_dumpers:
-        if k not in _json_dumpers:
-            _json_dumpers[k] = json_dumpers[k]
-    obj = convert_keys(obj)
-    s = json.dumps(obj, cls=Encoder, separators=(',',':'))
+    s = json.dumps(obj, cls=Encoder, separators=(',', ':'))
     return s
 
-def from_json(v, _json_loaders = []):
+
+def from_json(v, extra_json_loaders=()):
     if isinstance(v, basestring):
-        _json_loaders.extend(json_loaders)
-        for f in _json_loaders:
+        for f in list(extra_json_loaders) + json_loaders:
             try:
                 v = f(v)
                 break
-            except Exception, e:
+            except Exception:
                 continue
     return v
 
@@ -235,9 +240,9 @@ json_dumpers = {
 }
 
 json_loaders = [
-lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
+    lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
+    lambda s: datetime.datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%fZ')
 ]
 
-magic = 'hjksdfjgg;jfgfdggldfgj' # used in the check to see if a module has explicitly imported Pico to make it Picoable
 STREAMING = False
 dummy_request = {'DUMMY_REQUEST': True}

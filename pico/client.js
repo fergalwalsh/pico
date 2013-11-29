@@ -110,7 +110,6 @@ var pico = (function(){
             return f(obj, function_name, args_dict, callback, use_cache);
         };
 
-
         // generate doc string
         proxy.__doc__ =  "function(" + args.join(', ') + ', callback)';
         if(definition.doc) {
@@ -608,7 +607,6 @@ if(!document.addEventListener){
 else{
     document.addEventListener('DOMContentLoaded', function(){pico.main()}, false);
 }
-
 
 
 /*
