@@ -161,33 +161,13 @@ def stop_thread():
     _server_process.join(1)
 
 
-def is_authorised(f, authenticated_user):
-    if hasattr(f, 'private') and f.private:
-        return False
-    if getattr(f, 'protected', False):
-        if (authenticated_user == None):
-            return False
-        else:
-            if f.protected_users == None and f.protected_groups == None:
-                return True
-            if f.protected_users and authenticated_user in f.protected_users:
-                return True
-            if f.protected_groups and set(USERS.get(authenticated_user)['groups']).intersection(f.protected_groups):
-                return True
-            return False
-    else:
-        return True
-    return False
-
-def call_function(module, function_name, parameters, authenticated_user=None):
+def call_function(module, function_name, parameters):
     try:
         f = getattr(module, function_name)
-    except Exception:
-        raise Exception("No matching function availble. You asked for %s with these parameters %s!"%(function_name, parameters))
-    if not is_authorised(f, authenticated_user):
-        raise Exception("You are not authorised to access this function")
-    if 'pico_user' in f.func_code.co_varnames:
-        parameters.update({'pico_user': authenticated_user})
+    except AttributeError:
+        raise Exception("No matching function availble. "
+                        "You asked for %s with these parameters %s!" % (
+                            function_name, parameters))
     results = f(**parameters)
     response = Response(content=results)
     if hasattr(f, 'cacheable') and f.cacheable:
@@ -197,50 +177,51 @@ def call_function(module, function_name, parameters, authenticated_user=None):
     elif response.content.__class__.__name__ == 'generator':
         response.type = "chunks"
     return response
-    
 
-def call_method(module, class_name, method_name, parameters, init_args, authenticated_user=None):
+
+def call_method(module, class_name, method_name, parameters, init_args):
     try:
-        obj = getattr(module, class_name)(*init_args)
-    except KeyError, e:
-        raise Exception("No matching class availble. You asked for %s!"%(class_name))
-    r = call_function(obj, method_name, parameters, authenticated_user)
+        cls = getattr(module, class_name)
+        obj = cls(*init_args)
+    except KeyError:
+        raise Exception("No matching class availble."
+                        "You asked for %s!" % (class_name))
+    r = call_function(obj, method_name, parameters)
     del obj
-    return r 
+    return r
+
 
 def cache_key(params):
     params = dict(params)
     if '_callback' in params:
         del params['_callback']
     hashstring = hashlib.md5(str(params)).hexdigest()
-    cache_key = "__".join([params.get('_module', ''), params.get('_class', ''), params.get('_function', ''), hashstring])
+    cache_key = "__".join([params.get('_module', ''),
+                           params.get('_class', ''),
+                           params.get('_function', ''),
+                           hashstring])
     return cache_key.replace('.', '_')
 
 
-def call(params):
-    function = params.get('_function', '')
+def call(params, request):
+    func = params.get('_function', '')
     module_name = params.get('_module', '')
-    parameters = dict(params)
-    for k in parameters.keys():
-        if k.startswith('_') or k.startswith('pico_'):
-            del parameters[k]
-        else:
+    args = {}
+    for k in params.keys():
+        if not (k.startswith('_') or k.startswith('pico_')):
             try:
-                parameters[k] = json.loads(parameters[k])
+                args[k] = json.loads(params[k])
             except Exception:
                 try:
-                    parameters[k] = json.loads(parameters[k].replace("'", '"'))
+                    args[k] = json.loads(params[k].replace("'", '"'))
                 except Exception:
-                    parameters[k] = parameters[k]
+                    args[k] = params[k]
     callback = params.get('_callback', None)
     init_args = json.loads(params.get('_init', '[]'))
     class_name = params.get('_class', None)
     usecache = json.loads(params.get('_usecache', 'true'))
     response = Response()
-    if module_name == 'pico':
-        if function == 'authenticate':
-            response.content = authenticate(params)
-    elif usecache and os.path.exists(CACHE_PATH):
+    if usecache and os.path.exists(CACHE_PATH):
         try:
             response = serve_file(CACHE_PATH + cache_key(params))
             log("Serving from cache")
@@ -248,14 +229,15 @@ def call(params):
             pass
     if not response.content:
         module = pico.modules.load(module_name, RELOAD)
-        authenticated_user = authenticate(params, module)
-        for k in parameters:
-            parameters[k] = pico.from_json(parameters[k], getattr(module, "json_loaders", []))
+        json_loaders = getattr(module, "json_loaders", [])
+        from_json = lambda s: pico.from_json(s, json_loaders)
+        for k in args:
+            args[k] = from_json(args[k])
         if class_name:
-            init_args = map(lambda s: pico.from_json(s, getattr(module, "json_loaders", [])), init_args)
-            response = call_method(module, class_name, function, parameters, init_args)
+            init_args = map(from_json, init_args)
+            response = call_method(module, class_name, func, args, init_args)
         else:
-            response = call_function(module, function, parameters, authenticated_user)
+            response = call_function(module, func, args)
         response.json_dumpers = getattr(module, "json_dumpers", {})
         log(usecache, response.cacheable)
         if usecache and response.cacheable:
@@ -306,36 +288,7 @@ def static_file_handler(path):
     if not file_exists:
         file_path = os.path.join(file_path, DEFAULT)
     return serve_file(file_path)
-    
 
-def _hash(s):
-    m = hashlib.md5()
-    m.update(s)
-    return m.hexdigest()
-    
-def authenticate(params, module=None):
-    users = USERS
-    if users == {} or users == None:
-        if module and hasattr(module, 'PICO_USERS'):
-            users = module.PICO_USERS
-        else:
-            return None
-    username = params.get('_username', None)
-    if username:
-        key = params.get('_key', '')
-        nonce = params.get('_nonce', '')
-        dt =  time.time() - int(nonce)
-        if dt > 60:
-            raise Exception("Bad nonce. The time difference is: %s"%dt)
-        password = users.get(username, {}).get('password', None)
-        # log(password, str(nonce), _hash(password + str(nonce)))
-        if password and key == _hash(password + str(nonce)):
-            log("authenticated_user: %s"%username)
-        else:
-            raise Exception("Bad username or password")
-        return username
-    else:
-        return None
 
 def log(*args):
     if not SILENT:
@@ -383,9 +336,7 @@ def handle_api_v1(path, params):
         module_name = path.split('/')[2]
         return _load(module_name, params)
     elif '/call/' in path:
-        return call(params)
-    elif '/authenticate/' in path:
-        return authenticate(params)
+        return call(params, environ)
     raise APIError()
 
 def handle_api_v2(path, params):
@@ -475,6 +426,6 @@ DEFAULT = 'index.html'
 RELOAD = True
 STREAMING = False
 SILENT = False
-USERS = {}
+
 if __name__ == '__main__':
     main()
