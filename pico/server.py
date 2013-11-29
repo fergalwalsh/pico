@@ -152,6 +152,9 @@ def call(params, request):
     init_args = json.loads(params.get('_init', '[]'))
     class_name = params.get('_class', None)
     usecache = json.loads(params.get('_usecache', 'true'))
+    x_session_id = params.get('_x_session_id', None)
+    if x_session_id:
+        request['X-SESSION-ID'] = x_session_id
     response = Response()
     if usecache and os.path.exists(CACHE_PATH):
         try:
