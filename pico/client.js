@@ -140,6 +140,8 @@ var pico = (function(){
             this.__module__ = module_proxy;
             this.__class__ = class_name;
             this.__doc__ = definition.__doc__;
+            this.__uid__ = hex_md5(this.__module__.__uid__ + this.__class__)
+            this._beforeSend = undefined
             for(var i=0; i < args.length; i++){
                 this[args[i]] = this.__args__[i];
             }
@@ -180,53 +182,99 @@ var pico = (function(){
         return ProxyClass;
     }
 
+    function Request(url, data, callback){
+        this.url = url
+        this.base_url = url
+        this.data = this._prepareData(data)
+        this.callback = callback
+        this.xhr = new XMLHttpRequest()
+        this.parser = JSON.parse
+        this.deferred = new pico.Deferred()
+        this.responseType = 'json'
+        this.allow_chunked = false
+        this.exception = pico.exception
+        this.headers = {}
+    }
 
+    Request.prototype.send = function(){
+        var isFormData = (window.FormData && this.data instanceof FormData)
+        var method = this.data.length > 0 || isFormData ? 'POST' : 'GET'
+        if(!isFormData) {
+            this.setHeader('Content-Type', 'application/x-www-form-urlencoded');
+        }
+        this.xhr.open(method, this.url);
+        for(var header in this.headers){
+            this.xhr.setRequestHeader(header, this.headers[header]);
+        }
+        this.xhr.resonseType="text";
+        this.deferred.fail(this.exception)
+        this.deferred.done(this.callback)
+        var characters_read = 0;
+        var request = this
+        this.xhr.onreadystatechange = function(){
+            if(request.allow_chunked && this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
+                var i = this.response.indexOf("\n", request._characters_read + 1);
+                while (i > -1){
+                    var response = this.response.substring(characters_read, i);
+                    response = (response.match(/([^\,\n][^\n\[\]]*\S+[^\n\[\]]*)/) || [undefined])[0];
+                    characters_read = i;
+                    if (response){
+                        var result = request.parser(response);
+                        this._last_result = result;
+                        request.deferred.notify(result, url);
+                    }
+                    i = this.response.indexOf("\n", characters_read + 1);
                 }
             }
-            else{
-                pico.on_error(e);
+            if(this.readyState == 4){
+                if(this.status == 200){
+                    if(characters_read == 0){
+                        request.deferred.resolve(request.parser(this.response || this.responseText), request.url);
+                    }
+                    else{
+                        request.deferred.resolve(this._last_result, request.url);
+                    }
+                }
+                else{
+                    if(characters_read == 0){
+                        if(this.response || this.responseText){
+                            var e = request.parser(this.response || this.responseText)
+                            e = e || {status: this.status, exception: this.statusText}
+                            request.deferred.reject(e);
+                        }
+                    }
+                    else{
+                        request.deferred.reject({'exception': "Exception in chunked response"});
+                    }
+                }
             }
         }
-        else{
-            pico.on_error(e);
-        }
-    };
+        this.xhr.send(this.data)
+        return this.deferred.promise(this.xhr)
+    }
 
-    pico.get_json = function(url, callback){
-        return pico.xhr(url, undefined, callback);
-    };
+    Request.prototype.setResponseType = function(type){
+        this.responseType = type
+        this.parser = function(d){return d}
+        this.allow_chunked = false
+    }
 
-    pico.get_text = function(url, callback){
-        return pico.xhr(url, "response:text", callback);
-    };
-    
-    pico.xhr = function(url, data, callback)
-    {
-        var allow_chunked = true
-        if(data == "response:text"){
-            var parse = function(d){return d};
-            data = undefined;
-            allow_chunked = false
-        }
-        else{
-            var parse = JSON.parse;
-        }
-        if(typeof(data) == "function" && typeof(callback) == "undefined"){
-            callback = data;
-            data = undefined;
-        }
+    Request.prototype.setHeader = function(header, value){
+        this.headers[header] = value
+    }
+
+    Request.prototype.sign = function(auth_string){
+        var b64 = btoa(unescape(encodeURIComponent(auth_string))) 
+        this.setHeader('Authorization', 'Basic ' + b64)
+    }
+
+    Request.prototype.setCallback = function(callback){
+        this.callback = callback
+    }
+
+    Request.prototype._prepareData = function(data){
         if(typeof(data) == "undefined"){
             data = {};
-        }
-        if(typeof(callback) == "undefined"){
-            callback = pico.log;
-        }
-        if(typeof(callback) == "object" && callback.resolve && callback.notify){
-            var deferred = callback;
-        }
-        else{
-            var deferred = new pico.Deferred();
-            deferred.done(callback);
         }
         if(typeof(data) == "object") {
             if(some(data, is_file_or_filelist)) {
@@ -252,58 +300,45 @@ var pico = (function(){
                 data = data.replace(/%20/g,"+");
             }
         }
-        var xhr = new XMLHttpRequest();
-        xhr.open(data.length > 0 || (window.FormData && data instanceof FormData) ? 'POST' : 'GET', url);
-        if(!(window.FormData && data instanceof FormData)) {
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        }
-        xhr.resonseType="text";
-        xhr._characters_read = 0;
-        xhr.onreadystatechange = function(){
-            if(allow_chunked && this.readyState == 3 && this.getResponseHeader("Transfer-Encoding") == "chunked"){
-                var i = this.response.indexOf("\n", this._characters_read + 1);
-                while (i > -1){
-                    var response = this.response.substring(this._characters_read, i);
-                    response = (response.match(/([^\,\n][^\n\[\]]*\S+[^\n\[\]]*)/) || [undefined])[0];
-                    this._characters_read = i;
-                    if (response){
-                        var result = parse(response);
-                        this._last_result = result;
-                        deferred.notify(result, url);
-                    }
-                    i = this.response.indexOf("\n", this._characters_read + 1);
-                }
-            }
-            if(this.readyState == 4){
-                if(xhr.status == 200){
-                    if(this._characters_read == 0){
-                        deferred.resolve(parse(this.response || this.responseText), url);
-                    }
-                    else{
-                        deferred.resolve(this._last_result, url);
-                    }
-                }
-                else{
-                    if(this._characters_read == 0){
-                        if(this.response || this.responseText){
-                            deferred.reject(parse(this.response || this.responseText));
-                        }
-                    }
-                    else{
-                        deferred.reject({'exception': "Exception in chunked response"});
-                    }
-                }
-            }
-        };
-        deferred.fail(pico.exception);
-        xhr.send(data);
-        return deferred.promise(xhr);
+        return data
+    }
+
+    var scripts = document.getElementsByTagName("script"),
+        src = scripts[scripts.length-1].src;
+
+    pico.url = src.substr(0,src.indexOf("client.js")) || src.substr(0,src.indexOf("pico.js"));
+    pico.urls = [];
+    pico.cache = {
+        enabled: true
     };
+    pico.debug = false;
+    pico.td = 0;
+
+    pico.on_error = function(e){
+        console.error(e);
+    };
+
+    pico.exception = function(e){
+        pico.on_error(e);
+    };
+
+    pico.get_json = function(url, callback){
+        var request = new Request(url, {}, callback)
+        return request.send()
+    };
+
+    pico.get_text = function(url, callback){
+        var request = new Request(url, {}, callback)
+        request.setResponseType('text')
+        return request.send()
+    };
+    
 
     pico.get = function(url, data, callback)
     {
         if(document.getElementsByTagName("body").length > 0 && !contains(url, '.js') && !contains(url, '.css')){
-            return pico.xhr(url, data, callback);
+            var request = new Request(url, data, callback)
+            return request.send()
         }
         if(typeof(data) == "function" && typeof(callback) == "undefined"){
             callback = data;
@@ -372,10 +407,14 @@ var pico = (function(){
 
     pico.call_function = function(object, function_name, args, callback, use_cache)
     {
+        var request = pico.prepare_request(object, function_name, args, use_cache);
+        request.setCallback(callback);
+        return request.send()
     };
 
     pico.stream = function(object, function_name, args, callback, use_cache)
     {
+        var request = pico.prepare_request(object, function_name, args, use_cache),
             stream = {},
             deferred = new pico.Deferred();
 
@@ -385,7 +424,6 @@ var pico = (function(){
         }
 
         stream.open = function(){
-            stream.socket = new EventSource(request.base_url + '&' + urlencode(request.data));
             stream.socket.onmessage = function(e){
                 var message = JSON.parse(e.data)
                 if(message == 'PICO_CLOSE_STREAM'){
@@ -420,6 +458,7 @@ var pico = (function(){
         var module = object;
         if('__class__' in object){
             module = object.__module__;
+            object._beforeSend = object._beforeSend || module._beforeSend
             params['_init'] = JSON.stringify(object.__args__);
             var url = module.__url__ + module.__name__ + '/' + object.__class__ + '/' + function_name + '/'
         }
@@ -430,9 +469,11 @@ var pico = (function(){
             url += '?'
         }
         url += urlencode(params);
-        var request = {};
-        request.base_url = url;
-        request.data = data;
+
+        var request = new Request(url, data)
+        if(object._beforeSend){
+            object._beforeSend(request, object)
+        }
         return request;
     };
 
@@ -479,7 +520,9 @@ var pico = (function(){
         ns.__name__ = module_name;
         ns.__alias__ = alias;
         ns.__url__ = url || pico.url;
-        ns.__doc__ = definition['__doc__']
+        ns.__doc__ = definition.__doc__
+        ns.__uid__ = hex_md5(ns.__url__ + ns.__alias__)
+        ns._beforeSend = undefined
         for(var i in definition.functions){
             var func_def = definition.functions[i];
             var func_name = func_def.name;
@@ -493,13 +536,10 @@ var pico = (function(){
         return ns;
     };
 
-    pico.set_token = function(key, value){
-        pico.tokens[key] = value;
-    };
 
 
 
-    pico.main = function(){console.log('Pico: DOMContentLoaded')};
+    pico.main = function(){};
 
     pico.json = {
         dumps: function(obj){
