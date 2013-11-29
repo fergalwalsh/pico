@@ -258,11 +258,13 @@ def call(params, request):
     response.callback = callback
     return response
 
-def _load(module_name, params={}):
+
+def _load(module_name, params, environ):
     params['_module'] = 'pico.modules'
     params['_function'] = 'load'
-    params['module_name'] = '"%s"'%module_name
-    return call(params)
+    params['module_name'] = '"%s"' % module_name
+    return call(params, environ)
+
 
 def serve_file(file_path):
     response = Response()
@@ -331,15 +333,23 @@ def generate_exception_report(e, path, params):
     return response
 
 
-def handle_api_v1(path, params):
+def _value_summary(value):
+    s = repr(value)
+    if len(s) > 100:
+        s = s[:100] + '...'
+    return s
+
+
+def handle_api_v1(path, params, environ):
     if '/module/' in path:
         module_name = path.split('/')[2]
-        return _load(module_name, params)
+        return _load(module_name, params, environ)
     elif '/call/' in path:
         return call(params, environ)
     raise APIError()
 
-def handle_api_v2(path, params):
+
+def handle_api_v2(path, params, environ):
     # nice urls:
     #   /module_name/
     #   /module_name/function_name/?foo=bar
@@ -347,16 +357,16 @@ def handle_api_v2(path, params):
     #   /module_name/class_name/function_name/
     parts = [p for p in path.split('/') if p]
     if len(parts) == 1:
-        return _load(parts[0], params)
+        return _load(parts[0], params, environ)
     elif len(parts) == 2:
         params['_module'] = parts[0]
         params['_function'] = parts[1]
-        return call(params)
+        return call(params, environ)
     elif len(parts) == 3:
         params['_module'] = parts[0]
         params['_class'] = parts[1]
         params['_function'] = parts[2]
-        return call(params)
+        return call(params, environ)
     raise APIError(path)
 
 def handle_pico_js(path, params):
@@ -388,22 +398,24 @@ def wsgi_app(environ, start_response, enable_static=False):
             if '/pico/' in path:
                 path = path.replace('/pico/', '/')
                 try:
-                    response = handle_api_v1(path, params)
+                    response = handle_api_v1(path, params, environ)
                 except APIError:
                     try:
                         response = handle_pico_js(path, params)
                     except APIError:
                         try:
-                            response = handle_api_v2(path, params)
+                            response = handle_api_v2(path, params, environ)
                         except APIError:
                             response = not_found_error(path)
-            elif enable_static:           
+            elif enable_static:
                 try:
                     response = static_file_handler(path)
                 except OSError, e:
                     response = not_found_error(path)
             else:
                 response = not_found_error(path)
+        except PicoError, e:
+            response = e.response
         except Exception, e:
             response = generate_exception_report(e, path, params)
     response.set_header('Access-Control-Allow-Origin', '*')

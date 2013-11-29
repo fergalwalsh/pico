@@ -45,6 +45,25 @@ def protected(users=None, groups=None):
     return decorator
 
 
+def get_request():
+    """ Returns the wsgi environ dictionary for the current request """
+    frame = None
+    try:
+        frame = [f for f in inspect.stack() if f[3] == 'call'][0]
+        request = frame[0].f_locals['request']
+    except Exception:
+        request = dummy_request
+    finally:
+        del frame
+    return request
+
+
+def set_dummy_request(request):
+    """ Set a dummy request dictionary - for use in the console and testing """
+    dummy_request.clear()
+    dummy_request.update(request)
+
+
 class Pico(object):
     def __init__(self):
         pass
@@ -64,6 +83,15 @@ class object(object):
 class JSONString(str):
     def __init__(self, s):
         pass
+
+
+class PicoError(Exception):
+    def __init__(self, message=''):
+        Exception.__init__(self, message)
+        self.response = Response(status="500 " + message, content=message)
+
+    def __str__(self):
+        return repr(self.message)
 
 def convert_keys(obj):
     if type(obj) == dict: # convert non string keys to strings
@@ -131,3 +159,4 @@ lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
 
 magic = 'hjksdfjgg;jfgfdggldfgj' # used in the check to see if a module has explicitly imported Pico to make it Picoable
 STREAMING = False
+dummy_request = {'DUMMY_REQUEST': True}
