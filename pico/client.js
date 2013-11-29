@@ -424,6 +424,11 @@ var pico = (function(){
         }
 
         stream.open = function(){
+            var url = request.base_url + '&' + request.data
+            if(request.headers['X-SESSION-ID']){
+                url += '&_x_session_id=' + request.headers['X-SESSION-ID']
+            }
+            stream.socket = new EventSource(url);
             stream.socket.onmessage = function(e){
                 var message = JSON.parse(e.data)
                 if(message == 'PICO_CLOSE_STREAM'){
@@ -536,8 +541,35 @@ var pico = (function(){
         return ns;
     };
 
+    pico.authenticate = function (object, username, password){
+        var auth_string = username + ':' + password
+        var b64 = btoa(unescape(encodeURIComponent(auth_string)))
+        object._beforeSend = function(req){
+            req.setHeader('Authorization', 'Basic ' + b64)
+        }
+    }
 
+    pico.deauthenticate = function (object){
+        object._beforeSend = undefined
+    }
 
+    pico.save_session = function (object, session_id){
+        var key = object.__uid__ + 'X-SESSION-ID'
+        localStorage[key] = session_id
+        pico.open_session(object)
+    }
+
+    pico.clear_session = function (object){
+        var key = object.__uid__ + 'X-SESSION-ID'
+        delete localStorage[key]
+    }
+
+    pico.open_session = function (object){
+        var key = object.__uid__ + 'X-SESSION-ID'
+        object._beforeSend = function(req){
+            req.setHeader('X-SESSION-ID', localStorage[key])
+        }
+    }
 
     pico.main = function(){};
 
