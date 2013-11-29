@@ -10,6 +10,13 @@ import re
 import SocketServer
 import threading
 
+try:
+    import gevent
+    import gevent.pywsgi
+    use_gevent = True
+except ImportError:
+    use_gevent = False
+
 import pico
 import pico.modules
 
@@ -40,17 +47,23 @@ def main():
 
 
 def make_server(host='0.0.0.0', port=8800, multithreaded=False):
-    if multithreaded:
-        class ThreadedTCPServer(SocketServer.ForkingMixIn, wsgiref.simple_server.WSGIServer):
+    if use_gevent:
+        server = gevent.pywsgi.WSGIServer((host, port), wsgi_dev_app)
+        global STREAMING
+        STREAMING = True
+    elif multithreaded:
+        class ThreadedTCPServer(SocketServer.ForkingMixIn,
+                                WSGIServer):
             pass
-        server = ThreadedTCPServer((host, port), wsgiref.simple_server.WSGIRequestHandler)
+        server = ThreadedTCPServer((host, port), WSGIRequestHandler)
         server.set_app(wsgi_dev_app)
     else:
-        server = wsgiref.simple_server.make_server(host, port, wsgi_dev_app)
-    def log_message(self, format, *args):
-        if not SILENT:
-            print(format%(args))
-    server.RequestHandlerClass.log_message = log_message
+        server = make_server(host, port, wsgi_dev_app)
+
+        def log_message(self, format, *args):
+            if not SILENT:
+                print(format % (args))
+        server.RequestHandlerClass.log_message = log_message
     return server
 
 def start_thread(host='127.0.0.1', port=8800, silent=True):
