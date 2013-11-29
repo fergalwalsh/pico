@@ -96,8 +96,7 @@ var pico = (function(){
 
     function create_function_proxy(definition, function_name, obj) {
         var args = map(function(x){return x[0];}, definition.args),
-            use_cache = !!definition.cache,
-            use_auth = !!definition["protected"];
+            use_cache = !!definition.cache;
 
         var proxy = function() {
             var args_dict = combine(args, arguments),
@@ -107,8 +106,8 @@ var pico = (function(){
                typeof arguments[arguments.length - 1] === 'function') {
                    callback = arguments[arguments.length - 1];
             }
-            
-            return pico[definition.stream ? 'stream' : 'call_function'](obj, function_name, args_dict, callback, use_cache, use_auth);
+            var f = pico[definition.stream ? 'stream' : 'call_function']
+            return f(obj, function_name, args_dict, callback, use_cache);
         };
 
 
@@ -125,9 +124,9 @@ var pico = (function(){
         // helper function to get generate pico URL
         proxy.prepare_url = function() {
             var data = combine(args, arguments),
-                request = pico.prepare_request(obj, function_name, data, use_cache, use_auth);
+                request = pico.prepare_request(obj, function_name, data, use_cache);
 
-            return request.base_url + '&' + urlencode(request.data);
+            return request.base_url + '&' + request.data;
         };
 
         return proxy;
@@ -182,50 +181,7 @@ var pico = (function(){
     }
 
 
-    var _username, 
-        _password,
-        inprogress_auth_gets = {},
-        scripts = document.getElementsByTagName("script"),
-        src = scripts[scripts.length-1].src;
-
-    pico.url = src.substr(0,src.indexOf("client.js")) || src.substr(0,src.indexOf("pico.js"));
-    pico.urls = [];
-    pico.cache = {
-        enabled: true
-    };
-    pico.debug = false;
-    pico.td = 0;
-    pico.tokens = {};
-
-    pico.on_error = function(e){
-        console.error(e);
-    };
-
-    pico.on_authentication_failure = function(e, f){
-        console.error("authentication_failure: " + e.exception);
-    };
-
-    pico.exception = function(e){
-        if(e.exception){
-            if(contains(e.exception, "password") || contains(e.exception, "not authorised")){
-                var f = function(username, password){
-                    _username = username;
-                    _password = hex_md5(password);
-                    var x = inprogress_auth_gets[e.params._key];
-                    var def = pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
-                    def.done(function() {
-                        x.deferred.resolve.apply(x.deferred, arguments);
-                    });
                 }
-                pico.on_authentication_failure(e, f);
-            }else if(contains(e.exception, "nonce")){
-                var td = e.exception.split(':')[1];
-                pico.td += parseInt(td);
-                var x = inprogress_auth_gets[e.params._key];
-                var def = pico.call_function(x.object, x.function_name, x.args, x.callback, x.use_cache, x.use_auth);
-                def.done(function() {
-                    x.deferred.resolve.apply(x.deferred, arguments);
-                });
             }
             else{
                 pico.on_error(e);
@@ -414,39 +370,12 @@ var pico = (function(){
         return deferred.promise();
     };
 
-    pico.call_function = function(object, function_name, args, callback, use_cache, use_auth)
+    pico.call_function = function(object, function_name, args, callback, use_cache)
     {
-        var request = pico.prepare_request(object, function_name, args, use_cache, use_auth),
-            url = request.base_url,
-            data = request.data,
-            deferred = new pico.Deferred();
-
-        if(use_auth){
-            deferred.done(function() {
-                delete inprogress_auth_gets[request.key];
-            });
-
-            inprogress_auth_gets[request.key] = {
-                object: object,
-                function_name: function_name,
-                args: args,
-                callback: callback,
-                use_cache: use_cache,
-                use_auth: use_auth,
-                deferred: deferred
-            };
-        }
-
-        if(callback) {
-            deferred.done(callback);
-        }
-
-        return pico.get(url, data, deferred);
     };
 
-    pico.stream = function(object, function_name, args, callback, use_cache, use_auth)
+    pico.stream = function(object, function_name, args, callback, use_cache)
     {
-        var request = pico.prepare_request(object, function_name, args, use_cache, use_auth),
             stream = {},
             deferred = new pico.Deferred();
 
@@ -480,7 +409,7 @@ var pico = (function(){
         return deferred.promise(stream);
     };
 
-    pico.prepare_request = function(object, function_name, args, use_cache, use_auth){
+    pico.prepare_request = function(object, function_name, args, use_cache){
         var data = {};
         for(k in args){
             if(args[k] != undefined) {
@@ -497,20 +426,11 @@ var pico = (function(){
         else{
             var url = module.__url__ + module.__name__ + '/' + function_name + '/'
         }
-        params['_tokens'] = pico.json.dumps(pico.tokens || {});
-        if(use_auth){
-            var now = new Date();
-            var time = Math.round((now.getTime() - now.getTimezoneOffset() * 60000) / 1000)
-            params['_username'] = _username || '';
-            params['_nonce'] = time + (pico.td || 0);
-            params['_key'] = hex_md5(_password + params['_nonce']);
-        }
         if(!(pico.cache.enabled && use_cache) && !contains(url, '?')){
             url += '?'
         }
         url += urlencode(params);
         var request = {};
-        request.key = params['_key'];
         request.base_url = url;
         request.data = data;
         return request;
@@ -577,17 +497,7 @@ var pico = (function(){
         pico.tokens[key] = value;
     };
 
-    pico.authenticate = function(username, password, callback){
-        _username = username;
-        _password = hex_md5(password);
-        var obj = {'__name__': 'pico', '__url__': pico.url};
-        pico.call_function(obj, 'authenticate', {}, callback, false, true)
-    };
 
-    pico.unauthenticate = function(){
-        _username = null;
-        _password = null;
-    };
 
     pico.main = function(){console.log('Pico: DOMContentLoaded')};
 
