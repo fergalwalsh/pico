@@ -12,6 +12,7 @@ import json
 import os
 import decimal
 import datetime
+import inspect
 
 path = (os.path.dirname(__file__) or '.') + '/'
 
@@ -92,6 +93,86 @@ class PicoError(Exception):
 
     def __str__(self):
         return repr(self.message)
+
+
+class Response(object):
+    def __init__(self, **kwds):
+        self.status = '200 OK'
+        self._headers = {}
+        self.content = ''
+        self.type = "object"
+        self.cacheable = False
+        self.callback = None
+        self.json_dumpers = {}
+        self.__dict__.update(kwds)
+
+    def __getattribute__(self, a):
+        try:
+            return object.__getattribute__(self, a)
+        except AttributeError:
+            return None
+
+    def set_header(self, key, value):
+        self._headers[key] = value
+
+    @property
+    def headers(self):
+        headers = dict(self._headers)
+        headers['Access-Control-Allow-Origin'] = '*'
+        headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        headers['Access-Control-Expose-Headers'] = 'Transfer-Encoding'
+        if self.cacheable:
+            headers['Cache-Control'] = 'public, max-age=22222222'
+        if self.type == 'stream':
+            headers['Content-Type'] = 'text/event-stream'
+        elif self.type == 'object':
+            if self.callback:
+                headers['Content-Type'] = 'application/javascript'
+            else:
+                headers['Content-Type'] = 'application/json'
+            headers['Content-Length'] = str(len(self.output[0]))
+        else:
+            if 'Content-type' not in headers:
+                headers['Content-Type'] = 'text/plain'
+        return headers.items()
+
+    @property
+    def output(self):
+        if self._output:
+            return self._output
+        if all(hasattr(self.content, a) for a in ['read', 'seek', 'close']):
+            # if it looks like a duck...
+            # file, StringIO, codecs.StreamReaderWriter, etc.
+            self.type = "file"
+        if self.type == "plaintext":
+            return [self.content, ]
+        if self.type == "file":
+            return self.content
+        if self.type == "stream":
+            def f(stream):
+                for d in stream:
+                    yield 'data: ' + to_json(d) + '\n\n'
+                yield 'data: "PICO_CLOSE_STREAM"\n\n'
+            return f(self.content)
+        if self.type == "chunks":
+
+            def f(response):
+                yield (' ' * 1200) + '\n'
+                yield '[\n'
+                delimeter = ''
+                for r in response:
+                    yield delimeter + to_json(r, self.json_dumpers) + '\n'
+                    delimeter = ','
+                yield "]\n"
+            return f(self.content)
+        else:
+            s = to_json(self.content, self.json_dumpers)
+            if self.callback:
+                s = self.callback + '(' + s + ')'
+            s = [s, ]
+            self._output = s
+            return s
+
 
 def convert_keys(obj):
     if type(obj) == dict: # convert non string keys to strings

@@ -1,105 +1,24 @@
-from wsgiref.util import setup_testing_defaults
-import wsgiref.simple_server
-
 import sys
 import cgi
 import json
-import inspect
 import os
 import mimetypes
-import urlparse
 import hashlib
-import decimal
 import traceback
 import getopt
 import re
-import datetime
-import time
-
-import wsgiref
 import SocketServer
 import threading
 
 import pico
 import pico.modules
 
+from pico import PicoError, Response
+
 pico_path = (os.path.dirname(__file__) or '.') + '/'
 _server_process = None
 pico_exports = []
 
-class Response(object):
-    def __init__(self, **kwds):
-        self.status = '200 OK'
-        self._headers = {}
-        self.type = "object"
-        self.cacheable = False
-        self.callback = None
-        self.json_dumpers = {}
-        self.__dict__.update(kwds)
-    
-    def __getattribute__(self, a):
-        try:
-            return object.__getattribute__(self, a)
-        except AttributeError, e:
-            return None
-
-    def set_header(self, key, value):
-        self._headers[key] = value
-
-    @property   
-    def headers(self):
-        headers = dict(self._headers)
-        if self.cacheable:
-            headers['Cache-Control'] = 'public, max-age=22222222'
-        if self.type == 'stream':
-            headers['Content-Type'] = 'text/event-stream'
-        elif self.type == 'object':
-            if self.callback:
-                headers['Content-Type'] = 'application/javascript'
-            else:
-                headers['Content-Type'] = 'application/json'
-            headers['Content-Length'] = str(len(self.output[0]))
-        else:
-            if 'Content-type' not in headers:
-                headers['Content-Type'] = 'text/plain'
-        return headers.items()
-
-
-    @property
-    def output(self):
-        if self._output:
-            return self._output
-        log(self.type)
-        if hasattr(self.content, 'read') and hasattr(self.content, 'seek') and hasattr(self.content, 'close'):
-            self.type = "file" # it looks like a duck... a file
-        if self.type == "plaintext":
-            return [self.content,]
-        if self.type == "file":
-            return self.content
-        if self.type == "stream":
-            def f(stream):
-                for d in stream:
-                    yield 'data: ' + pico.to_json(d) + '\n\n'
-                yield 'data: "PICO_CLOSE_STREAM"\n\n'
-            return f(self.content)
-        if self.type == "chunks":
-            log("chunks")
-            def f(response):
-                yield (' ' * 1200) + '\n'
-                yield '[\n'
-                delimeter = ''
-                for r in response:
-                    yield delimeter + pico.to_json(r, self.json_dumpers) + '\n'
-                    delimeter = ','
-                yield "]\n"
-            return f(self.content)
-        else:
-            s = pico.to_json(self.content, self.json_dumpers)
-            if self.callback:
-                s = self.callback + '(' + s + ')'
-            s = [s,]
-            self._output = s
-            return s
 
 class APIError(Exception): pass
 
@@ -382,7 +301,6 @@ def not_found_error(path):
     return response
 
 def wsgi_app(environ, start_response, enable_static=False):
-    setup_testing_defaults(environ)
     if environ['REQUEST_METHOD'] == 'OPTIONS':
         # This is to hanle the preflight request for CORS.
         # See https://developer.mozilla.org/en/http_access_control
@@ -418,9 +336,6 @@ def wsgi_app(environ, start_response, enable_static=False):
             response = e.response
         except Exception, e:
             response = generate_exception_report(e, path, params)
-    response.set_header('Access-Control-Allow-Origin', '*')
-    response.set_header('Access-Control-Allow-Headers', 'Content-Type')
-    response.set_header('Access-Control-Expose-Headers', 'Transfer-Encoding')
     start_response(response.status, response.headers)
     return response.output
 
