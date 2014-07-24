@@ -248,6 +248,7 @@ json_dumpers = {
 }
 
 json_loaders = [
+    lambda s: datetime.datetime.strptime(s, '%Y-%m-%d').date(),
     lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
     lambda s: datetime.datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%fZ')
 ]
