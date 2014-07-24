@@ -244,7 +244,7 @@ def from_json(v, extra_json_loaders=()):
 
 
 json_dumpers = {
-    decimal.Decimal: lambda d: float(d)
+    decimal.Decimal: lambda d: str(d)
 }
 
 json_loaders = [
