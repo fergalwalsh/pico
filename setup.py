@@ -78,6 +78,7 @@ setup(
     url='http://github.com/fergalwalsh/pico',
     download_url = 'https://github.com/fergalwalsh/pico/tarball/%s'%pico.__version__,
     packages=packages,
+    install_requires=['wrapt >= 1.8.0'],
     data_files = data_files,
     cmdclass = cmdclasses
 )
