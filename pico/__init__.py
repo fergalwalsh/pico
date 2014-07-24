@@ -105,7 +105,7 @@ class Response(object):
         self.status = '200 OK'
         self._headers = {}
         self.content = ''
-        self.type = "object"
+        self._type = "object"
         self.cacheable = False
         self.callback = None
         self.json_dumpers = {}
@@ -142,13 +142,21 @@ class Response(object):
         return headers.items()
 
     @property
-    def output(self):
-        if self._output:
-            return self._output
+    def type(self):
         if all(hasattr(self.content, a) for a in ['read', 'seek', 'close']):
             # if it looks like a duck...
             # file, StringIO, codecs.StreamReaderWriter, etc.
-            self.type = "file"
+            self._type = "file"
+        return self._type
+
+    @type.setter
+    def type(self, value):
+        self._type = value
+
+    @property
+    def output(self):
+        if self._output:
+            return self._output
         if self.type == "plaintext":
             return [self.content, ]
         if self.type == "file":
