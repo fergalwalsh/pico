@@ -36,14 +36,17 @@ class APIError(Exception):
 def main():
     opts_args = getopt.getopt(sys.argv[1:], "hp:dm", ["help",
                                                       "port=",
+                                                      "debug=",
                                                       "no-reload"])
     args = dict(opts_args[0])
     port = int(args.get('--port', args.get('-p', 8800)))
     multithreaded = '-m' in args
-    global RELOAD
+    global RELOAD, DEBUG
     RELOAD = RELOAD and ('--no-reload' not in args)
+    DEBUG = args.get('--debug', 'true').lower() == 'true'
     host = '0.0.0.0'  # 'localhost'
     run(host, port, multithreaded)
+
 
 def run(host='0.0.0.0', port=8800, multithreaded=False):
     server = _make_server(host, port, multithreaded)
@@ -252,7 +255,7 @@ def static_file_handler(path):
         m = re.match(url, path)
         if m:
             if '{0}' not in directory:
-                directory +='{0}'
+                directory += '{0}'
             file_path = directory.format(*m.groups())
 
     # if the path does not point to a valid file, try default file
@@ -291,13 +294,14 @@ def extract_params(environ):
 
 def generate_exception_report(e, path, params):
     response = Response()
-    full_tb = traceback.extract_tb(sys.exc_info()[2])
-    tb_str = ''
-    for tb in full_tb:
-        tb_str += "File '%s', line %s, in %s; " % (tb[0], tb[1], tb[2])
     report = {}
     report['exception'] = str(e)
-    report['traceback'] = tb_str
+    if DEBUG:
+        full_tb = traceback.extract_tb(sys.exc_info()[2])
+        tb_str = ''
+        for tb in full_tb:
+            tb_str += "File '%s', line %s, in %s; " % (tb[0], tb[1], tb[2])
+        report['traceback'] = tb_str
     report['url'] = path.replace('/pico/', '/')
     report['params'] = dict([(k, _value_summary(params[k])) for k in params])
     log(json.dumps(report, indent=1))
@@ -411,6 +415,7 @@ DEFAULT = 'index.html'
 RELOAD = True
 STREAMING = False
 SILENT = False
+DEBUG = False
 
 if __name__ == '__main__':
     main()
