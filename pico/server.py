@@ -43,6 +43,9 @@ def main():
     global RELOAD
     RELOAD = RELOAD and ('--no-reload' not in args)
     host = '0.0.0.0'  # 'localhost'
+    run(host, port, multithreaded)
+
+def run(host='0.0.0.0', port=8800, multithreaded=False):
     server = _make_server(host, port, multithreaded)
     print("Serving on http://%s:%s/" % (host, port))
     if multithreaded:
