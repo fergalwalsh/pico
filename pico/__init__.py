@@ -14,6 +14,8 @@ import decimal
 import datetime
 import inspect
 
+import wrapt
+
 path = (os.path.dirname(__file__) or '.') + '/'
 
 
@@ -32,22 +34,20 @@ def private(func):
     return func
 
 
-def protected(users=None, groups=None):
-    def decorator(func):
-        func.protected = True
-        func.protected_users = users
-        func.protected_groups = groups
-        return func
-    if callable(users):
-        f = users
-        users = None
-        groups = None
-        return decorator(f)
-    if users and not hasattr(users, '__iter__'):
-        users = [groups]
-    if groups and not hasattr(groups, '__iter__'):
-        groups = [groups]
-    return decorator
+def protected(protector):
+    """
+    Decorator for protecting a function.
+    The protected function will not be called if the protector raises
+     an exception.
+    The protector should have the following signature:
+        def protector(wrapped, *args, **kwargs):
+            pass
+    """
+    @wrapt.decorator
+    def wrapper(wrapped, instance, args, kwargs):
+        protector(wrapped, *args, **kwargs)
+        return wrapped(*args, **kwargs)
+    return wrapper
 
 
 def get_request():
