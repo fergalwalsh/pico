@@ -26,7 +26,7 @@ class object(pico.object):
 
     def __init__(self):
         super(object, self).__init__()
-        self.username = None
+        self.user = None
         if type(self.account_manager) == dict:
             self.account_manager = Bunch(**self.account_manager)
         request = pico.get_request()
