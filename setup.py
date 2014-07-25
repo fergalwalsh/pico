@@ -4,8 +4,6 @@ from distutils.command.install import INSTALL_SCHEMES
 import os
 import sys
 
-import pico
-
 # Borrowed from Django
 class osx_install_data(install_data):
     # On MacOS, the platform-specific lib dir is /System/Library/Framework/Python/.../
@@ -69,17 +67,18 @@ if len(sys.argv) > 1 and sys.argv[1] == 'bdist_wininst':
         file_info[0] = '\\PURELIB\\%s' % file_info[0]
         
 
+version = '1.4.1'
 
 setup(
     name='pico',
-    version=pico.__version__,
+    version=version,
     description='Pico Web Application Framework',
     author='Fergal Walsh',
     url='http://github.com/fergalwalsh/pico',
-    download_url = 'https://github.com/fergalwalsh/pico/tarball/%s'%pico.__version__,
+    download_url='https://github.com/fergalwalsh/pico/tarball/%s' % version,
     packages=packages,
     install_requires=['wrapt >= 1.8.0'],
-    data_files = data_files,
-    cmdclass = cmdclasses
+    data_files=data_files,
+    cmdclass=cmdclasses
 )
 
