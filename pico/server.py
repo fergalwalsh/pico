@@ -157,7 +157,7 @@ def call(params, request):
     args = {}
     for k in params.keys():
         if not (k.startswith('_') or k.startswith('pico_')):
-            params[k] = params[k].decode('utf-8')
+            params[k] = params[k]
             try:
                 args[k] = json.loads(params[k])
             except Exception:
