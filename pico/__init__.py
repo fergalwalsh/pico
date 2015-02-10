@@ -45,7 +45,9 @@ def protected(protector):
     """
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
-        protector(wrapped, *args, **kwargs)
+        request = get_request()
+        if request != dummy_request:
+            protector(wrapped, *args, **kwargs)
         return wrapped(*args, **kwargs)
     return wrapper
 
