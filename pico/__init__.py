@@ -94,9 +94,10 @@ class JSONString(str):
 
 
 class PicoError(Exception):
-    def __init__(self, message=''):
+    def __init__(self, message='', status=500):
         Exception.__init__(self, message)
-        self.response = Response(status="500 " + message, content=message)
+        self.response = Response(status="%s %s" % (status, message),
+                                 content=message)
 
     def __str__(self):
         return repr(self.message)
