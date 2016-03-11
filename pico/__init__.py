@@ -1,260 +1,174 @@
 """
-Pico is a very small RPC library and web application framework for Python.
+Pico is a minimalistic HTTP API framework for Python.
 
 Copyright (c) 2012, Fergal Walsh.
 License: BSD
 """
 
-__author__ = 'Fergal Walsh'
-__version__ = '1.4.2'
-
-import json
-import os
-import decimal
-import datetime
+import sys
+import pico.pragmaticjson as json
 import inspect
+import functools
 
-import wrapt
+from collections import defaultdict
 
-path = (os.path.dirname(__file__) or '.') + '/'
+from werkzeug.exceptions import HTTPException
+from werkzeug.wrappers import Request, Response
 
+from decorators import base_decorator
 
-def cacheable(func):
-    func.cacheable = True
-    return func
-
-
-def stream(func):
-    func.stream = True
-    return func
+__author__ = 'Fergal Walsh'
+__version__ = '2.0.0-dev'
 
 
-def private(func):
-    func.private = True
-    return func
+class PicoApp(object):
 
-
-def protected(protector):
-    """
-    Decorator for protecting a function.
-    The protected function will not be called if the protector raises
-     an exception.
-    The protector should have the following signature:
-        def protector(wrapped, *args, **kwargs):
-            pass
-    """
-    @wrapt.decorator
-    def wrapper(wrapped, instance, args, kwargs):
-        request = get_request()
-        if request != dummy_request:
-            protector(wrapped, *args, **kwargs)
-        return wrapped(*args, **kwargs)
-    return wrapper
-
-
-def get_request():
-    """ Returns the wsgi environ dictionary for the current request """
-    frame = None
-    try:
-        frame = [f for f in inspect.stack() if f[3] == 'call'][0]
-        request = frame[0].f_locals['request']
-    except Exception:
-        request = dummy_request
-    finally:
-        del frame
-    return request
-
-
-def set_dummy_request(request):
-    """ Set a dummy request dictionary - for use in the console and testing """
-    dummy_request.clear()
-    dummy_request.update(request)
-
-
-class Pico(object):
     def __init__(self):
-        pass
+        self.registry = defaultdict(dict)
+        self.modules = {}
+        self.url_map = {}
+        self._before_request = None
 
+    def register(self, func):
+        self.modules[func.__module__] = sys.modules[func.__module__]
+        self.registry[func.__module__][func.__name__] = func
+        self._build_url_map()
 
-class object(object):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+    def _build_url_map(self):
+        self.url_map = {}
+        for module_name in self.registry:
+            url = self.module_url(module_name)
+            self.url_map[url] = functools.partial(self.describe_module, module_name)
+            for func_name, func in self.registry[module_name].items():
+                url = self.func_url(func)
+                self.url_map[url] = func
+                self.url_map[url + '_doc/'] = functools.partial(self.function_doc, func)
 
-    @property
-    def json(self):
-        return to_json(self.__dict__)
+    def module_url(self, module_name):
+        module_path = module_name.replace('.', '/')
+        url = '/{module}/'.format(module=module_path)
+        return url
 
-    def __str__(self):
-        return self.json
+    def func_url(self, func):
+        module_path = func.__module__.replace('.', '/')
+        url = '/{module}/{func_name}/'.format(module=module_path, func_name=func.__name__)
+        return url
 
+    def describe_module(self, module_name, **kwargs):
+        d = {}
+        d['name'] = module_name
+        d['doc'] = self.modules[module_name].__doc__
+        d['url'] = self.module_url(module_name)
+        d['functions'] = []
+        for func_name, func in self.registry[module_name].items():
+            d['functions'].append(self.describe_function(func))
+        return json_reponse(d)
 
-class JSONString(str):
-    def __init__(self, s):
-        pass
+    def describe_function(self, func, **kwargs):
+        annotations = dict(func._annotations)
+        request_args = annotations.pop('request_args', {})
+        a = inspect.getargspec(func)
+        arg_list_r = reversed(a.args)
+        defaults_list_r = reversed(a.defaults or [None])
+        args = reversed(map(None, arg_list_r, defaults_list_r))
+        args = filter(lambda x: x[0] and x[0] != 'self' and x[0] not in request_args, args)
+        d = dict(
+            name=func.__name__,
+            doc=func.__doc__,
+            url=self.func_url(func),
+            args=args,
+        )
+        d.update(annotations)
+        return d
 
+    def function_doc(self, func, **kwargs):
+        d = self.describe_function(func)
+        args = ', '.join(['%s=%s' % a for a in d['args']])
+        s = '{name}({args})\n{docstring}'.format(name=d['name'], docstring=d['doc'], args=args)
+        return Response(s)
 
-class PicoError(Exception):
-    def __init__(self, message='', status=500):
-        Exception.__init__(self, message)
-        self.response = Response(status="%s %s" % (status, message),
-                                 content=message)
+    def not_found_handler(self, path):
+        return "404 %s not found" % path
 
-    def __str__(self):
-        return repr(self.message)
+    def call_function(self, func, request, **kwargs):
+        args = request.args
+        if request.headers.get('content-type') == 'application/json':
+            args.update(json.loads(request.data))
+        else:
+            args.update(request.form.to_dict(flat=True))
+            args.update(request.files.to_dict(flat=True))
+        args['_request'] = request
+        args.update(kwargs)
+        response = func(**args)
+        return response
 
-
-class Response(object):
-    def __init__(self, **kwds):
-        self.status = '200 OK'
-        self._headers = {}
-        self.content = ''
-        self._type = "object"
-        self.cacheable = False
-        self.callback = None
-        self.json_dumpers = {}
-        self.__dict__.update(kwds)
-
-    def __getattribute__(self, a):
+    def dispatch_request(self, request):
+        path = request.path
+        if path[-1] != '/':
+            path += '/'
         try:
-            return object.__getattribute__(self, a)
-        except AttributeError:
-            return None
-
-    def set_header(self, key, value):
-        self._headers[key] = value
-
-    @property
-    def headers(self):
-        headers = dict(self._headers)
-        headers['Access-Control-Allow-Origin'] = '*'
-        headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        headers['Access-Control-Expose-Headers'] = 'Transfer-Encoding'
-        if self.cacheable:
-            headers['Cache-Control'] = 'public, max-age=22222222'
-        if self.type == 'stream':
-            headers['Content-Type'] = 'text/event-stream'
-        elif self.type == 'object':
-            if self.callback:
-                headers['Content-Type'] = 'application/javascript'
-            else:
-                headers['Content-Type'] = 'application/json'
-            headers['Content-Length'] = str(len(self.output[0]))
-        else:
-            if 'Content-type' not in headers:
-                headers['Content-Type'] = 'text/plain'
-        return headers.items()
-
-    @property
-    def type(self):
-        if all(hasattr(self.content, a) for a in ['read', 'seek', 'close']):
-            # if it looks like a duck...
-            # file, StringIO, codecs.StreamReaderWriter, etc.
-            self._type = "file"
-        return self._type
-
-    @type.setter
-    def type(self, value):
-        self._type = value
-
-    @property
-    def output(self):
-        if self._output:
-            return self._output
-        if self.type == "plaintext":
-            return [self.content, ]
-        if self.type == "file":
-            return self.content
-        if self.type == "stream":
-            def f(stream):
-                for d in stream:
-                    yield 'data: ' + to_json(d) + '\n\n'
-                yield 'data: "PICO_CLOSE_STREAM"\n\n'
-            return f(self.content)
-        if self.type == "chunks":
-
-            def f(response):
-                yield (' ' * 1200) + '\n'
-                yield '[\n'
-                delimeter = ''
-                for r in response:
-                    yield delimeter + to_json(r, self.json_dumpers) + '\n'
-                    delimeter = ','
-                yield "]\n"
-            return f(self.content)
-        else:
-            s = to_json(self.content, self.json_dumpers)
-            if self.callback:
-                s = self.callback + '(' + s + ')'
-            s = [s, ]
-            self._output = s
-            return s
-
-
-def convert_keys(obj):
-    if type(obj) == dict:  # convert non string keys to strings
-        return dict((str(k), convert_keys(obj[k])) for k in obj)
-    else:
-        return obj
-
-
-def to_json(obj, extra_json_dumpers=None):
-    if isinstance(obj, JSONString):
-        return obj
-    json_dumpers_ = dict(json_dumpers)
-    json_dumpers_.update(extra_json_dumpers or {})
-    obj = convert_keys(obj)
-
-    class Encoder(json.JSONEncoder):
-        def default(self, obj):
-            if type(obj) in json_dumpers_:
-                obj = json_dumpers_[type(obj)](obj)
-                convert_keys(obj)
-                return obj
-            for obj_type, dumper in json_dumpers_.iteritems():
-                if isinstance(obj, obj_type):
-                    return dumper(obj)
-            if hasattr(obj, 'as_json'):
-                return obj.as_json()
-            if hasattr(obj, 'json'):
-                return json.loads(obj.json)
-            elif hasattr(obj, 'tolist'):
-                return obj.tolist()
-            elif all(hasattr(obj, a) for a in ['read', 'seek', 'close']):
-                s = obj.read()
-                obj.close()
-                return s
-            elif hasattr(obj, '__iter__'):
-                return list(obj)
-            else:
-                return str(obj)
-
-        def encode(self, obj):
-            convert_keys(obj)
-            return json.JSONEncoder.encode(self, obj)
-    s = json.dumps(obj, cls=Encoder, separators=(',', ':'))
-    return s
-
-
-def from_json(v, extra_json_loaders=()):
-    if isinstance(v, basestring):
-        for f in list(extra_json_loaders) + json_loaders:
+            handler = self.url_map[path]
+        except KeyError:
             try:
-                v = f(v)
-                break
-            except Exception:
-                continue
-    return v
+                path = request.script_root + path
+                handler = self.url_map[path]
+            except KeyError:
+                return Response(self.not_found_handler(path))
+        try:
+            request.args = request.args.to_dict(flat=True)
+            callback = request.args.pop('_callback', None)
+            if self._before_request:
+                self._before_request(request, path)
+            response = self.call_function(handler, request)
+            if callback:
+                response = jsonp_reponse(response=response, callback=callback)
+        except HTTPException, e:
+            return e
+        except Exception, e:
+            return json_reponse(dict(exception=str(e)))
+        return response
+
+    def wsgi_app(self, environ, start_response):
+        request = Request(environ)
+        response = self.dispatch_request(request)
+        return response(environ, start_response)
+
+    def __call__(self, environ, start_response):
+        return self.wsgi_app(environ, start_response)
+
+    def _decorate_and_register(self, wrapper):
+        def decorator(f):
+            f = wrapper(f)
+            self.register(f)
+            return f
+        return decorator
+
+    def expose(self, *args, **kwargs):
+        @base_decorator()
+        def wrapper(wrapped, args, kwargs, request):
+            result = wrapped(*args, **kwargs)
+            if isinstance(result, Response):
+                response = result
+            else:
+                response = json_reponse(result)
+            return response
+        return self._decorate_and_register(wrapper)
+
+    def before_request(self, *args, **kwargs):
+        def decorator(f):
+            self._before_request = f
+            return f
+        return decorator
 
 
-json_dumpers = {
-    decimal.Decimal: lambda d: str(d)
-}
+def json_reponse(result):
+    return Response(json.dumps(result), content_type='application/json')
 
-json_loaders = [
-    lambda s: datetime.datetime.strptime(s, '%Y-%m-%d').date(),
-    lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
-    lambda s: datetime.datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%fZ')
-]
 
-STREAMING = False
-dummy_request = {'DUMMY_REQUEST': True}
+def jsonp_reponse(result=None, response=None, callback=None):
+    if response:
+        json_string = response.response[0]
+    if result:
+        json_string = json.dumps(result)
+    content = '{callback}({json});'.format(callback=callback, json=json_string)
+    return Response(content, content_type='text/javascript')
