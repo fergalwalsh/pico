@@ -26,7 +26,14 @@ def goodbye(who):
 ## Start the server:
 `python -m pico.server example`
 
-##Call your http api functions from Javascript:
+
+##Call your http api functions from with any http client:
+`curl http://localhost:4242/example/hello/?who="fergal"`
+
+`curl http://localhost:4242/example/goodbye/?who="fergal"`
+
+
+##Or use the Javascript client:
 
 ```html
 <!DOCTYPE HTML>
@@ -49,10 +56,6 @@ def goodbye(who):
 </html>
 
 ```
-
-##Call your http api functions from with any http client:
-`curl http://localhost:4242/example/hello/?who="fergal"`
-`curl http://localhost:4242/example/goodbye/?who="fergal"`
 
 
 
