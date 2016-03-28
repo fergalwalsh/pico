@@ -9,6 +9,7 @@ import sys
 import pico.pragmaticjson as json
 import inspect
 import functools
+import logging
 
 from collections import defaultdict
 
@@ -19,6 +20,9 @@ from decorators import base_decorator
 
 __author__ = 'Fergal Walsh'
 __version__ = '2.0.0-dev'
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class PicoApp(object):
@@ -133,7 +137,18 @@ class PicoApp(object):
         except HTTPException, e:
             return e
         except Exception, e:
-            return json_reponse(dict(exception=str(e)))
+            tags = {
+                'module_name': handler.__module__,
+                'function_name': handler.__name__
+            }
+            logger.error(e,
+                         exc_info=True,
+                         extra={'data': dict(tags), 'tags': dict(tags)})
+            if not request.accept_mimetypes.accept_html:
+                response = json_reponse(dict(exception=unicode(e)))
+                response.status = '500 Internal Server Error'
+            else:
+                raise
         return response
 
     def wsgi_app(self, environ, start_response):
