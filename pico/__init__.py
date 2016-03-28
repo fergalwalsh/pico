@@ -91,16 +91,28 @@ class PicoApp(object):
         return "404 %s not found" % path
 
     def call_function(self, func, request, **kwargs):
-        args = request.args
-        if request.headers.get('content-type') == 'application/json':
-            args.update(json.loads(request.data))
-        else:
-            args.update(request.form.to_dict(flat=True))
-            args.update(request.files.to_dict(flat=True))
-        args['_request'] = request
+        args = self.parse_args(request)
         args.update(kwargs)
+        callback = args.pop('_callback', None)
         response = func(**args)
+        if callback:
+            response = jsonp_reponse(response=response, callback=callback)
         return response
+
+    def parse_args(self, request):
+        args = request.args.to_dict(flat=True)
+        if request.headers.get('content-type') != 'application/json':
+            args.update(request.form.to_dict(flat=True))
+            for k in args:
+                try:
+                    args[k] = json.loads(args[k])
+                except ValueError:
+                    pass
+            args.update(request.files.to_dict(flat=True))
+        else:
+            args.update(json.loads(request.data))
+        args['_request'] = request
+        return args
 
     def dispatch_request(self, request):
         path = request.path
@@ -115,13 +127,9 @@ class PicoApp(object):
             except KeyError:
                 return Response(self.not_found_handler(path))
         try:
-            request.args = request.args.to_dict(flat=True)
-            callback = request.args.pop('_callback', None)
             if self._before_request:
                 self._before_request(request, path)
             response = self.call_function(handler, request)
-            if callback:
-                response = jsonp_reponse(response=response, callback=callback)
         except HTTPException, e:
             return e
         except Exception, e:
