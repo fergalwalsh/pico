@@ -105,7 +105,7 @@ class PicoApp(object):
 
     def parse_args(self, request):
         args = request.args.to_dict(flat=True)
-        if request.headers.get('content-type') != 'application/json':
+        if 'application/json' not in request.headers.get('content-type'):
             args.update(request.form.to_dict(flat=True))
             for k in args:
                 try:
