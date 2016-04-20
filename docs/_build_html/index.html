@@ -1,0 +1,208 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Pico: Python HTTP APIs for Humans &mdash; Pico 2.0.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.0.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Pico 2.0.0 documentation" href="#" />
+    <link rel="next" title="Introduction" href="guide/intro.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="pico-python-http-apis-for-humans">
+<h1>Pico: Python HTTP APIs for Humans<a class="headerlink" href="#pico-python-http-apis-for-humans" title="Permalink to this headline">¶</a></h1>
+<p>Release v2.0. (<span class="xref std std-ref">installation</span>)</p>
+<p>Pico is a very small HTTP API framework for Python. It enables you to write HTTP
+APIs with minimal fuss, overhead and boilerplate code.</p>
+<div class="literal-block-wrapper container" id="example-py">
+<div class="code-block-caption"><span class="caption-text">example.py</span><a class="headerlink" href="#example-py" title="Permalink to this code">¶</a></div>
+<div class="highlight-python"><div class="highlight"><pre><span></span> <span class="kn">from</span> <span class="nn">pico</span> <span class="kn">import</span> <span class="n">PicoApp</span>
+
+ <span class="n">app</span> <span class="o">=</span> <span class="n">PicoApp</span><span class="p">()</span>
+
+
+ <span class="nd">@app.expose</span><span class="p">()</span>
+ <span class="k">def</span> <span class="nf">hello</span><span class="p">(</span><span class="n">who</span><span class="o">=</span><span class="s2">&quot;world&quot;</span><span class="p">):</span>
+     <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;hello </span><span class="si">%s</span><span class="s2">!&quot;</span> <span class="o">%</span> <span class="n">who</span>
+     <span class="k">return</span> <span class="n">s</span>
+
+
+ <span class="nd">@app.expose</span><span class="p">()</span>
+ <span class="k">def</span> <span class="nf">goodbye</span><span class="p">(</span><span class="n">who</span><span class="p">):</span>
+     <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;goodbye </span><span class="si">%s</span><span class="s2">!&quot;</span> <span class="o">%</span> <span class="n">who</span>
+     <span class="k">return</span> <span class="n">s</span>
+</pre></div>
+</div>
+</div>
+<p>Start the development server:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">pico</span><span class="o">.</span><span class="n">server</span> <span class="n">example</span>
+</pre></div>
+</div>
+<p>Call your http api functions from with any http client:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>curl http://localhost:4242/example/hello/
+curl http://localhost:4242/example/hello/?who=&quot;fergal&quot;
+curl http://localhost:4242/example/goodbye/?who=&quot;fergal&quot;
+</pre></div>
+</div>
+<p>Use the Javascript client.</p>
+<div class="literal-block-wrapper container" id="index-html">
+<div class="code-block-caption"><span class="caption-text">index.html</span><a class="headerlink" href="#index-html" title="Permalink to this code">¶</a></div>
+<div class="highlight-html"><div class="highlight"><pre><span></span><span class="cp">&lt;!DOCTYPE HTML&gt;</span>
+<span class="p">&lt;</span><span class="nt">html</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">head</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">title</span><span class="p">&gt;</span>Pico Example<span class="p">&lt;/</span><span class="nt">title</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">script</span> <span class="na">src</span><span class="o">=</span><span class="s">&quot;client.js&quot;</span><span class="p">&gt;&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">script</span><span class="p">&gt;</span>
+    <span class="nx">pico</span><span class="p">.</span><span class="nx">load</span><span class="p">(</span><span class="s2">&quot;example&quot;</span><span class="p">);</span>
+  <span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">head</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">body</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">p</span> <span class="na">id</span><span class="o">=</span><span class="s">&quot;message&quot;</span><span class="p">&gt;&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">script</span><span class="p">&gt;</span>
+    <span class="nx">example</span><span class="p">.</span><span class="nx">hello</span><span class="p">(</span><span class="s2">&quot;Fergal&quot;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+      <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">&#39;message&#39;</span><span class="p">).</span><span class="nx">innerHTML</span> <span class="o">=</span> <span class="nx">response</span><span class="p">;</span>
+    <span class="p">});</span>
+  <span class="p">&lt;/</span><span class="nt">script</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">body</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">html</span><span class="p">&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="features">
+<span id="id1"></span><h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Automatic URL routing</li>
+<li>Decorators</li>
+<li>Automatic JSON serialisation</li>
+<li>Automatic argument parsing &amp; passing</li>
+<li>Simple streaming responses</li>
+<li>Development server with debugger</li>
+<li>Python Client</li>
+<li>Javascript Client</li>
+</ul>
+</div>
+<div class="section" id="id2">
+<span id="id3"></span><h2>Installation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+<p>Simply install with <cite>pip</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">U</span> <span class="n">pico</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-user-guide">
+<h2>The User Guide<a class="headerlink" href="#the-user-guide" title="Permalink to this headline">¶</a></h2>
+<p>An introduction to Pico and a guide to how to use it.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guide/intro.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guide/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guide/clientjs.html">The Javascript Client</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guide/clientjs.html#basic-structure">Basic Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide/clientjs.html#api">API</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">Pico</a></h1>
+
+
+
+<p class="blurb">Pico is a very small HTTP API framework for Python</p>
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=fergalwalsh&repo=pico&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guide/intro.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guide/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guide/clientjs.html">The Javascript Client</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="guide/intro.html" title="next chapter">Introduction</a></li>
+  </ul></li>
+</ul>
+</div><h3>Useful Links</h3>
+<ul>
+  <li><a href="http://github.com/fergalwalsh/pico">Pico @ GitHub</a></li>
+  <li><a href="http://pypi.python.org/pypi/pico">Pico @ PyPI</a></li>
+  <li><a href="http://github.com/fergalwalsh/pico/issues">Issue Tracker</a></li>
+</ul>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2016, Fergal Walsh.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
+      
+      |
+      <a href="_sources/index.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
