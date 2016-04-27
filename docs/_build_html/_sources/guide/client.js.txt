@@ -1,5 +1,0 @@
-.. _client.js:
-
-The Javascript Client
----------------------
-
