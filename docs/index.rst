@@ -104,3 +104,8 @@ An introduction to Pico and a guide to how to use it.
    guide/clientpy
 
 
+
+Acknowledgements
+----------------
+
+Pico development is kindly supported by `Hipo <http://hipolabs.com>`_.
