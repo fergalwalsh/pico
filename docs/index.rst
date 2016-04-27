@@ -97,8 +97,8 @@ An introduction to Pico and a guide to how to use it.
 .. toctree::
    :maxdepth: 2
 
-   guide/installation
    guide/intro
+   guide/installation
    guide/decorators
    guide/clientjs
    guide/clientpy
