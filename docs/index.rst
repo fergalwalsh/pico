@@ -77,6 +77,8 @@ Features
 - Automatic argument parsing & passing
 - Simple streaming responses
 - Development server with debugger
+- WSGI Compliant
+- Built upon `Werkzeug <http://werkzeug.pocoo.org/>`_
 - Python Client
 - Javascript Client
 
@@ -95,8 +97,9 @@ An introduction to Pico and a guide to how to use it.
 .. toctree::
    :maxdepth: 2
 
-   guide/intro
    guide/installation
+   guide/intro
+   guide/decorators
    guide/clientjs
    guide/clientpy
 
