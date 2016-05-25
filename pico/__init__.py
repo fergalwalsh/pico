@@ -6,7 +6,6 @@ License: BSD
 """
 
 import sys
-import pico.pragmaticjson as json
 import inspect
 import functools
 import logging
@@ -16,7 +15,9 @@ from collections import defaultdict
 from werkzeug.exceptions import HTTPException
 from werkzeug.wrappers import Request, Response
 
-from decorators import base_decorator
+from . import pragmaticjson as json
+from .decorators import json_response
+from .wrappers import JsonResponse
 
 __author__ = 'Fergal Walsh'
 __version__ = '2.0.0-dev'
@@ -66,7 +67,7 @@ class PicoApp(object):
         d['functions'] = []
         for func_name, func in self.registry[module_name].items():
             d['functions'].append(self.describe_function(func))
-        return json_reponse(d)
+        return JsonResponse(d)
 
     def describe_function(self, func, **kwargs):
         annotations = dict(func._annotations)
@@ -100,20 +101,25 @@ class PicoApp(object):
         callback = args.pop('_callback', None)
         response = func(**args)
         if callback:
-            response = jsonp_reponse(response=response, callback=callback)
+            response = response.to_jsonp(callback)
         return response
 
     def parse_args(self, request):
-        args = request.args.to_dict(flat=True)
-        if 'application/json' not in request.headers.get('content-type'):
-            args.update(request.form.to_dict(flat=True))
-            for k in args:
-                try:
-                    args[k] = json.loads(args[k])
-                except ValueError:
-                    pass
-            args.update(request.files.to_dict(flat=True))
-        else:
+        # first we take the GET querystring args
+        args = _multidict_to_dict(request.args)
+        # update and override args with post form data
+        args.update(_multidict_to_dict(request.form))
+        # try to parse any strings as json
+        for k in args:
+            if isinstance(args[k], list):
+                for i, v in enumerate(args[k]):
+                    args[k][i] = json.try_loads(v)
+            else:
+                args[k] = json.try_loads(args[k])
+        # update args with files
+        args.update(_multidict_to_dict(request.files))
+        # update and override args with json data
+        if 'application/json' in request.headers.get('content-type'):
             args.update(json.loads(request.data))
         args['_request'] = request
         return args
@@ -122,21 +128,26 @@ class PicoApp(object):
         path = request.path
         if path[-1] != '/':
             path += '/'
+        request.path = path
         try:
             handler = self.url_map[path]
         except KeyError:
             try:
                 path = request.script_root + path
                 handler = self.url_map[path]
+                request.path = path
             except KeyError:
                 return Response(self.not_found_handler(path))
+        return self.handle_request(request, handler)
+
+    def handle_request(self, request, handler, **kwargs):
         try:
             if self._before_request:
-                self._before_request(request, path)
-            response = self.call_function(handler, request)
-        except HTTPException, e:
+                self._before_request(request)
+            response = self.call_function(handler, request, **kwargs)
+        except HTTPException as e:
             return e
-        except Exception, e:
+        except Exception as e:
             tags = {
                 'module_name': handler.__module__,
                 'function_name': handler.__name__
@@ -145,7 +156,7 @@ class PicoApp(object):
                          exc_info=True,
                          extra={'data': dict(tags), 'tags': dict(tags)})
             if not request.accept_mimetypes.accept_html:
-                response = json_reponse(dict(exception=unicode(e)))
+                response = JsonResponse(dict(exception=unicode(e)))
                 response.status = '500 Internal Server Error'
             else:
                 raise
@@ -167,15 +178,11 @@ class PicoApp(object):
         return decorator
 
     def expose(self, *args, **kwargs):
-        @base_decorator()
-        def wrapper(wrapped, args, kwargs, request):
-            result = wrapped(*args, **kwargs)
-            if isinstance(result, Response):
-                response = result
-            else:
-                response = json_reponse(result)
-            return response
-        return self._decorate_and_register(wrapper)
+        def decorator(f):
+            f = json_response()(f)
+            self.register(f)
+            return f
+        return decorator
 
     def before_request(self, *args, **kwargs):
         def decorator(f):
@@ -184,14 +191,12 @@ class PicoApp(object):
         return decorator
 
 
-def json_reponse(result):
-    return Response(json.dumps(result), content_type='application/json')
-
-
-def jsonp_reponse(result=None, response=None, callback=None):
-    if response:
-        json_string = response.response[0]
-    if result:
-        json_string = json.dumps(result)
-    content = '{callback}({json});'.format(callback=callback, json=json_string)
-    return Response(content, content_type='text/javascript')
+def _multidict_to_dict(m):
+    """ Returns a dict with list values only when a key has multiple values. """
+    d = {}
+    for k, v in m.iterlists():
+        if len(v) == 1:
+            d[k] = v[0]
+        else:
+            d[k] = v
+    return d

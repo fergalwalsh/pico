@@ -13,6 +13,11 @@ json_loaders = [
     lambda s: datetime.datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%fZ')
 ]
 
+try:
+    basestring
+except NameError:
+    basestring = str
+
 
 def convert_keys(obj):
     if type(obj) == dict:  # convert non string keys to strings
@@ -90,3 +95,10 @@ def loads(value, extra_json_loaders=()):
                 obj[key] = value
         return obj
     return json.loads(value, cls=Decoder, json_loaders=json_loaders_, object_hook=object_hook)
+
+
+def try_loads(s):
+    try:
+        return loads(s)
+    except ValueError:
+        return s

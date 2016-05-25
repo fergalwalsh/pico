@@ -1,10 +1,12 @@
 import types
-import pico.pragmaticjson as json
 
 import wrapt
 
 from werkzeug.exceptions import MethodNotAllowed
 from werkzeug.wrappers import Response
+
+from . import pragmaticjson as json
+from .wrappers import JsonResponse
 
 
 def base_decorator(annotations={}, *args, **kwargs):
@@ -42,6 +44,18 @@ def request_arg(*args, **kwargs):
     return wrapper
 
 
+def json_response(*args, **kwargs):
+    @base_decorator()
+    def wrapper(wrapped, args, kwargs, request):
+        result = wrapped(*args, **kwargs)
+        if isinstance(result, Response):
+            response = result
+        else:
+            response = JsonResponse(result)
+        return response
+    return wrapper
+
+
 def stream(*args, **kwargs):
     @base_decorator(annotations={'stream': True})
     def wrapper(wrapped, args, kwargs, request):
@@ -60,7 +74,7 @@ def set_cookie(*args, **kwargs):
     @base_decorator()
     def wrapper(wrapped, innerargs, innerkwargs, request):
         result = wrapped(*innerargs, **innerkwargs)
-        response = Response(json.dumps(result), content_type='application/json')
+        response = JsonResponse(result)
         for k, v in result.items():
             response.set_cookie(k, v, **kwargs)
         return response
@@ -71,7 +85,7 @@ def delete_cookie(key, **kwargs):
     @base_decorator()
     def wrapper(wrapped, innerargs, innerkwargs, request):
         result = wrapped(*innerargs, **innerkwargs)
-        response = Response(json.dumps(result), content_type='application/json')
+        response = JsonResponse(result)
         response.delete_cookie(key, **kwargs)
         return response
     return wrapper
@@ -83,7 +97,7 @@ def protected(protector, annotations={}):
     The protected function will not be called if the protector raises
      an exception or returns False.
     The protector should have the following signature:
-        def protector(wrapped, *args, **kwargs):
+        def protector(request, wrapped, args, kwargs):
             return True
     """
     @base_decorator(annotations)
@@ -98,3 +112,28 @@ def require_method(method):
         if not request.method == method:
             raise MethodNotAllowed()
     return protected(p, annotations={'method': method})
+
+
+def cookie(key):
+    def accessor(request):
+        return request.cookies.get(key)
+    return accessor
+
+
+def header(name):
+    def accessor(request):
+        return request.headers.get(name)
+    return accessor
+
+
+def basic_auth(name=None):
+    def accessor(request):
+        if request.authorization:
+            auth = request.authorization
+            if name is None:
+                return (auth.username, auth.password)
+            else:
+                return getattr(auth, name)
+        else:
+            return None
+    return accessor
