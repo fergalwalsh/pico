@@ -19,7 +19,7 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
     .. py:decoratormethod:: before_request(*args, **kwargs)
 
-        Used to decorate a function of the form `f(request, path)` which is called before every request. Can be used to modify the request object e.g. for setting the `.user` attribute based on cookies or headers.
+        Used to decorate a function of the form `f(request)` which is called before every request. Can be used to modify the request object e.g. for setting the `.user` attribute based on cookies or headers.
 
 
 .. py:module:: pico.decorators
