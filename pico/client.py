@@ -66,7 +66,7 @@ class PicoClient(object):
         Load a remote module
         example = client.load("example")
         """
-        module_dict = self._request(self.url + '/' + module_name)
+        module_dict = self._request(self.url + '/' + module_name.replace('.', '/'))
         return self.load_from_dict(module_dict)
 
     def load_from_dict(self, module_def):
@@ -79,7 +79,7 @@ class PicoClient(object):
         module.__doc__ = module_def['doc']
         module._pico_client = self
         for function_def in module_def['functions']:
-            args = function_def['args'] + [('_timeout', None), ('_headers', {})]
+            args = [(arg['name'], arg['default']) for arg in function_def['args']] + [('_timeout', None), ('_headers', {})]
             args_string = ', '.join(["%s=%r" % (a, d) for a, d in args])
             code = 'def {name}({arg_string}):\n'
             code += '    """ {docstring} """\n'

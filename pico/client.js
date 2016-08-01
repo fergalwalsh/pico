@@ -101,7 +101,7 @@ var pico = ( function() {
 
     function create_function_proxy(definition, function_name, obj) {
         var args = map(function(x) {
-                return x[0];
+                return x.name;
             }, definition.args),
             use_cache = !!definition.cache;
 
@@ -414,9 +414,10 @@ var pico = ( function() {
                 data[k] = is_file_or_filelist(args[k]) ? args[k] : pico.json.dumps(args[k]);
             }
         }
-        var url = module.__url__ + function_name + '/'
+        var url = module.__url__ + '/' + function_name + '/'
 
         var request = new Request(url, data)
+        request.setHeader('Accept', 'application/json');
         if (module._beforeSend) {
             module._beforeSend(request, module)
         }
@@ -465,6 +466,10 @@ var pico = ( function() {
         }
         ;
         return ns;
+    };
+
+    pico.load_from_obj = function(definition) {
+        return pico.module_proxy(definition, definition.name);
     };
 
     pico.authenticate = function(object, username, password) {
