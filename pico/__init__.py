@@ -167,6 +167,10 @@ class PicoApp(object):
                 self._before_request(request)
             response = self.call_function(handler, request, **kwargs)
         except HTTPException as e:
+            if not request.accept_mimetypes.accept_html:
+                response = JsonResponse(dict(exception=unicode(e.description)))
+                response.status = unicode(e.code)
+                return response
             return e
         except Exception as e:
             tags = {
