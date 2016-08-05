@@ -35,6 +35,8 @@ class PicoApp(object):
         self.modules = {}
         self.url_map = {}
         self._before_request = None
+        path = os.path.dirname((inspect.getfile(inspect.currentframe())))
+        self._pico_js = open(path + '/client.js').read()
 
     def register(self, func):
         self.modules[func.__module__] = sys.modules[func.__module__]
@@ -106,9 +108,7 @@ class PicoApp(object):
         return JsonResponse(d)
 
     def pico_js(self, **kwargs):
-        path = os.path.dirname((inspect.getfile(inspect.currentframe())))
-        s = open(path + '/client.js').read()
-        response = Response(s, content_type='text/javascript')
+        response = Response(self._pico_js, content_type='text/javascript')
         return response
 
     def not_found_handler(self, path):
