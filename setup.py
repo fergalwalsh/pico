@@ -12,4 +12,5 @@ setup(
     packages=['pico'],
     test_suite='nose2.collector.collector',
     install_requires=['wrapt >= 1.8.0', 'Werkzeug >= 0.11.4', 'requests >= 2.9.1'],
+    include_package_data=True,
 )
