@@ -9,11 +9,6 @@ var pico = ( function() {
         '__version__': '2.0.0-dev'
     }
 
-    function contains(str, sub) {
-        return (str.indexOf(sub) != -1);
-    }
-    ;
-
     function urlencode(params) {
         return map(function(k) {
             return k + "=" + encodeURIComponent(params[k])
@@ -102,8 +97,7 @@ var pico = ( function() {
     function create_function_proxy(definition, function_name, obj) {
         var args = map(function(x) {
                 return x.name;
-            }, definition.args),
-            use_cache = !!definition.cache;
+            }, definition.args);
 
         var proxy = function() {
             var args_dict = combine(args, arguments),
@@ -114,7 +108,7 @@ var pico = ( function() {
                 callback = arguments[arguments.length - 1];
             }
             var f = pico[definition.stream ? 'stream' : 'call_function']
-            return f(obj, function_name, args_dict, callback, use_cache);
+            return f(obj, function_name, args_dict, callback);
         };
 
         // generate doc string
@@ -130,7 +124,7 @@ var pico = ( function() {
         // helper function to get generate pico URL
         proxy.prepare_url = function() {
             var data = combine(args, arguments),
-                request = pico.prepare_request(obj, function_name, data, use_cache);
+                request = pico.prepare_request(obj, function_name, data);
 
             return request.base_url + '?' + request.data;
         };
@@ -260,16 +254,7 @@ var pico = ( function() {
         return data
     }
 
-    var scripts = document.getElementsByTagName("script"),
-        src = scripts[scripts.length - 1].src;
-
-    pico.url = src.substr(0, src.indexOf("client.js")) || src.substr(0, src.indexOf("pico.js"));
-    pico.urls = [];
-    pico.cache = {
-        enabled: true
-    };
     pico.debug = false;
-    pico.td = 0;
 
     pico.on_error = function(e) {
         console.error(e);
@@ -290,90 +275,21 @@ var pico = ( function() {
         return request.send()
     };
 
-
     pico.get = function(url, data, callback) {
-        if (document.getElementsByTagName("body").length > 0 && !contains(url, '.js') && !contains(url, '.css')) {
-            var request = new Request(url, data, callback)
-            return request.send()
-        }
-        if (typeof (data) == "function" && typeof (callback) == "undefined") {
-            callback = data;
-            data = undefined;
-        }
-        if (typeof (data) == "undefined") {
-            data = {};
-        }
-        if (typeof (data) == "object") {
-            data = urlencode(data);
-        }
-        url = encodeURI(url);
-        if (data) {
-            url += "&" + data;
-        }
-        if (typeof (callback) == "object" && callback.resolve && callback.notify) {
-            var deferred = callback;
-        } else {
-            var deferred = new pico.Deferred();
-        }
-        if (callback) {
-            var callback_name = 'jsonp' + Math.floor(Math.random() * 10e10);
-            window[callback_name] = function(result) {
-                deferred.resolve(result, url); /*delete window[callback_name]*/
-            };
-            deferred.done(callback);
-            var params = {
-                '_callback': callback_name
-            };
-            url += url.indexOf('?') > -1 ? '&' : '?';
-            url += urlencode(params);
-        }
-        var elem;
-        if (document.getElementsByTagName("body").length > 0) {
-            elem = document.getElementsByTagName("body")[0];
-            if (url.substr(-4) == '.css') {
-                var style = document.createElement('link');
-                style.type = 'text/css';
-                style.src = url;
-                style.rel = "stylesheet";
-                style.onload = function() {
-                    document.getElementsByTagName("body")[0].removeChild(this);
-                };
-                elem.appendChild(style);
-            } else {
-                var script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.src = url;
-                script.onload = function() {
-                    document.getElementsByTagName("body")[0].removeChild(this);
-                };
-                elem.appendChild(script);
-            }
-            if (pico.debug) {
-                console.log("pico.get in BODY " + url);
-            }
-        } else {
-            if (pico.debug) console.log("pico.get in HEAD " + url);
-            if (url.substr(-4) == '.css') {
-                document.write('<link type="text/css" href="' + url + '" rel="stylesheet" />');
-            } else {
-                document.write('<script type="text/javascript" src="' + url + '"></scr' + 'ipt>');
-            }
-
-        }
-        return deferred.promise();
+        var request = new Request(url, data, callback)
+        return request.send()
     };
 
-    pico.call_function = function(object, function_name, args, callback, use_cache) {
-        var request = pico.prepare_request(object, function_name, args, use_cache);
+    pico.call_function = function(object, function_name, args, callback) {
+        var request = pico.prepare_request(object, function_name, args);
         request.setCallback(callback);
         return request.send()
     };
 
-    pico.stream = function(object, function_name, args, callback, use_cache) {
-        var request = pico.prepare_request(object, function_name, args, use_cache),
+    pico.stream = function(object, function_name, args, callback) {
+        var request = pico.prepare_request(object, function_name, args),
             stream = {},
             deferred = new pico.Deferred();
-
 
         if (typeof callback === 'function') {
             deferred.progress(callback);
@@ -407,7 +323,7 @@ var pico = ( function() {
         return deferred.promise(stream);
     };
 
-    pico.prepare_request = function(module, function_name, args, use_cache) {
+    pico.prepare_request = function(module, function_name, args) {
         var data = {};
         for (k in args) {
             if (args[k] != undefined) {
@@ -478,31 +394,29 @@ var pico = ( function() {
         object._beforeSend = function(req) {
             req.setHeader('Authorization', 'Basic ' + b64)
         }
-    }
+    };
 
     pico.deauthenticate = function(object) {
         object._beforeSend = undefined
-    }
+    };
 
     pico.save_session = function(object, session_id) {
         var key = object.__name__ + 'X-SESSION-ID'
         localStorage[key] = session_id
         pico.open_session(object)
-    }
+    };
 
     pico.clear_session = function(object) {
         var key = object.__name__ + 'X-SESSION-ID'
         delete localStorage[key]
-    }
+    };
 
     pico.open_session = function(object) {
         var key = object.__name__ + 'X-SESSION-ID'
         object._beforeSend = function(req) {
             req.setHeader('X-SESSION-ID', localStorage[key])
         }
-    }
-
-    pico.main = function() {};
+    };
 
     pico.json = {
         dumps: function(obj) {
@@ -533,15 +447,6 @@ var pico = ( function() {
 
     return pico;
 }());
-if (!document.addEventListener) {
-    document.attachEvent('DOMContentLoaded', function() {
-        pico.main()
-    });
-} else {
-    document.addEventListener('DOMContentLoaded', function() {
-        pico.main()
-    }, false);
-}
 
 /*
  * Implementation of the jQuery deferred interface
