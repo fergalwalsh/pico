@@ -72,12 +72,11 @@ class PicoApp(object):
         self.url_map['/pico.js'] = self.pico_js
         for module_name in self.registry:
             url = self.module_url(module_name)
-            self.url_map[url] = functools.partial(self.describe_module, module_name)
-            self.url_map[url + '.js'] = functools.partial(self.module_js, module_name)
+            self.url_map[url] = lambda **kwargs: JsonResponse(self.module_definition(module_name, **kwargs))
+            self.url_map[url + '.js'] = lambda **kwargs: JsonResponse(self.module_definition(module_name, **kwargs)).to_jsonp('pico.load_module_obj')
             for func_name, func in self.registry[module_name].items():
                 url = self.func_url(func)
                 self.url_map[url] = func
-                self.url_map[url + '/_doc'] = functools.partial(self.function_doc, func)
 
     def module_url(self, module_name):
         module_path = module_name.replace('.', '/')
@@ -89,29 +88,24 @@ class PicoApp(object):
         url = '/{module}/{func_name}'.format(module=module_path, func_name=func.__name__)
         return url
 
-    def describe_module(self, module_name, **kwargs):
+    def module_definition(self, module_name, **kwargs):
         d = {}
         d['name'] = module_name
         d['doc'] = self.modules[module_name].__doc__
         d['url'] = self.module_url(module_name)
         d['functions'] = []
         for func_name, func in self.registry[module_name].items():
-            d['functions'].append(self.describe_function(func))
-        return JsonResponse(d)
+            d['functions'].append(self.function_definition(func))
+        return d
 
-    def module_js(self, module_name, **kwargs):
-        response = self.describe_module(module_name, **kwargs)
-        response = response.to_jsonp('pico.load_from_obj')
-        return response
-
-    def describe_function(self, func, **kwargs):
+    def function_definition(self, func, **kwargs):
         annotations = dict(func._annotations)
         request_args = annotations.pop('request_args', {})
         a = inspect.getargspec(func)
         arg_list_r = reversed(a.args)
         defaults_list_r = reversed(a.defaults or [None])
         args = reversed(map(None, arg_list_r, defaults_list_r))
-        args = [{'name': a[0], 'default': a[1]} for a in args]
+        args = [{'name': arg[0], 'default': arg[1]} for arg in args]
         args = filter(lambda x: x['name'] and x['name'] != 'self' and x['name'] not in request_args, args)
         d = dict(
             name=func.__name__,
@@ -121,12 +115,6 @@ class PicoApp(object):
         )
         d.update(annotations)
         return d
-
-    def function_doc(self, func, **kwargs):
-        d = self.describe_function(func)
-        args = ', '.join(['%{name}s=%{default}s'.format(**a) for a in d['args']])
-        s = '{name}({args})\n{docstring}'.format(name=d['name'], docstring=d['doc'], args=args)
-        return JsonResponse(d)
 
     def pico_js(self, **kwargs):
         response = Response(self._pico_js, content_type='text/javascript')
@@ -168,8 +156,6 @@ class PicoApp(object):
         path = request.path
         if path[-1] == '/':
             path = path[:-1]
-        if request.method == 'OPTIONS':
-            path += '/_doc'
         request.path = path
         try:
             handler = self.url_map[path]
