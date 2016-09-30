@@ -56,11 +56,6 @@ class PicoApp(object):
         path = os.path.dirname((inspect.getfile(inspect.currentframe())))
         self._pico_js = open(path + '/client.js').read()
 
-    def register(self, func):
-        self.modules[func.__module__] = sys.modules[func.__module__]
-        self.registry[func.__module__][func.__name__] = func
-        self._build_url_map()
-
     def register_module(self, module, alias=None):
         if type(module) == str:
             module = importlib.import_module(module)
@@ -232,26 +227,6 @@ class PicoApp(object):
 
     def __call__(self, environ, start_response):
         return self.wsgi_app(environ, start_response)
-
-    def _decorate_and_register(self, wrapper):
-        def decorator(f):
-            f = wrapper(f)
-            self.register(f)
-            return f
-        return decorator
-
-    def expose(self, *args, **kwargs):
-        def decorator(f):
-            f = json_response()(f)
-            self.register(f)
-            return f
-        return decorator
-
-    def before_request(self, *args, **kwargs):
-        def decorator(f):
-            self._before_request = f
-            return f
-        return decorator
 
 
 def _multidict_to_dict(m):
