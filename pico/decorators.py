@@ -62,9 +62,14 @@ def stream(*args, **kwargs):
         result = wrapped(*args, **kwargs)
 
         def f(stream):
-            for d in stream:
-                yield 'data: ' + json.dumps(d) + '\n\n'
-            yield 'data: "PICO_CLOSE_STREAM"\n\n'
+            try:
+                for d in stream:
+                    yield 'data: ' + json.dumps(d) + '\n\n'
+                yield 'event: close\n'
+                yield 'data: close\n\n'
+            except Exception as e:
+                yield 'event: error\n'
+                yield 'data: ' + str(e) + '\n\n'
         response = Response(f(result), content_type='text/event-stream')
         return response
     return wrapper
