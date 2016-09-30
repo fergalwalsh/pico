@@ -168,20 +168,32 @@ class PicoApp(object):
             response = self.call_function(handler, request, **kwargs)
         except HTTPException as e:
             if not request.accept_mimetypes.accept_html:
-                response = JsonResponse(dict(exception=unicode(e.description)))
-                response.status = unicode(e.code)
+                exception = {
+                    'name': e.name,
+                    'code': e.code,
+                    'message': unicode(e.description),
+
+                }
+                response = JsonResponse(exception)
+                response.status = '%s %s' % (e.code, e.name)
                 return response
             return e
         except Exception as e:
             tags = {
-                'module_name': handler.__module__,
-                'function_name': handler.__name__
+                'module_name': getattr(handler, '__module__', None),
+                'function_name': getattr(handler, '__name__', None),
             }
             logger.error(e,
                          exc_info=True,
                          extra={'data': dict(tags), 'tags': dict(tags)})
             if not request.accept_mimetypes.accept_html:
-                response = JsonResponse(dict(exception=unicode(e)))
+                exception = {
+                    'name': type(e).__name__,
+                    'code': 500,
+                    'message': unicode(e),
+
+                }
+                response = JsonResponse(exception)
                 response.status = '500 Internal Server Error'
             else:
                 raise
