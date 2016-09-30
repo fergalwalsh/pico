@@ -63,7 +63,7 @@ class TestApp(unittest.TestCase):
 
     def test_post_only_get(self):
         r = self.client.get('/testapp/post_only/')
-        self.assertEqual(r.status, '405 METHOD NOT ALLOWED')
+        self.assertEqual(r.status, '405 Method Not Allowed')
 
     def test_not_post_only_get(self):
         r = self.client.get('/testapp/not_post_only/')
