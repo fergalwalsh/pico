@@ -184,8 +184,12 @@ class PicoApp(object):
 
     def handle_request(self, request, handler, **kwargs):
         try:
-            if self._before_request:
-                self._before_request(request)
+            if hasattr(handler, '__module__'):
+                module = self.modules.get(handler.__module__)
+                if self._before_request:
+                    self._before_request(request)
+                if hasattr(module, '_before_request'):
+                    module._before_request(request)
             response = self.call_function(handler, request, **kwargs)
         except HTTPException as e:
             if not request.accept_mimetypes.accept_html:
