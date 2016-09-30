@@ -28,6 +28,24 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
+registry = defaultdict(dict)
+
+
+def expose(*args, **kwargs):
+    def decorator(func):
+        func = json_response()(func)
+        registry[func.__module__][func.__name__] = func
+        return func
+    return decorator
+
+
+def before_request(*args, **kwargs):
+    def decorator(f):
+        sys.modules[f.__module__]._before_request = f
+        return f
+    return decorator
+
+
 class PicoApp(object):
 
     def __init__(self):
@@ -43,8 +61,16 @@ class PicoApp(object):
         self.registry[func.__module__][func.__name__] = func
         self._build_url_map()
 
-    def register_module(self, module_name):
-        importlib.import_module(module_name)
+    def register_module(self, module, alias=None):
+        if type(module) == str:
+            module = importlib.import_module(module)
+        module_name = module.__name__
+        alias = alias or module_name
+        self.modules[alias] = module
+        self.registry[alias] = registry[module_name]
+        for k in self.registry[alias]:
+            self.registry[alias][k].__module__ = alias
+        self._build_url_map()
 
     def _build_url_map(self):
         self.url_map = {}
