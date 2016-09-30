@@ -52,7 +52,7 @@ class PicoApp(object):
         self.url_map = {}
         self._before_request = None
         path = os.path.dirname((inspect.getfile(inspect.currentframe())))
-        self._pico_js = open(path + '/client.js').read()
+        self._pico_js = open(path + '/pico.min.js').read()
 
     def register_module(self, module, alias=None):
         if type(module) == str:
