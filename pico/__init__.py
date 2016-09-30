@@ -7,11 +7,9 @@ License: BSD
 
 import sys
 import inspect
-import functools
 import logging
 import importlib
 import os.path
-
 from collections import defaultdict
 
 from werkzeug.exceptions import HTTPException, NotFound
@@ -70,6 +68,8 @@ class PicoApp(object):
     def _build_url_map(self):
         self.url_map = {}
         self.url_map['/pico.js'] = self.pico_js
+        self.url_map['/app'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs))
+        self.url_map['/app.js'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs)).to_jsonp('pico.load_app_obj')
         for module_name in self.registry:
             url = self.module_url(module_name)
             self.url_map[url] = lambda **kwargs: JsonResponse(self.module_definition(module_name, **kwargs))
@@ -87,6 +87,13 @@ class PicoApp(object):
         module_path = func.__module__.replace('.', '/')
         url = '/{module}/{func_name}'.format(module=module_path, func_name=func.__name__)
         return url
+
+    def app_definition(self, **kwargs):
+        d = {}
+        d['modules'] = []
+        for module_name in self.registry:
+            d['modules'].append(self.module_definition(module_name))
+        return d
 
     def module_definition(self, module_name, **kwargs):
         d = {}
