@@ -235,7 +235,7 @@ class PicoApp(object):
 def _multidict_to_dict(m):
     """ Returns a dict with list values only when a key has multiple values. """
     d = {}
-    for k, v in m.iterlists():
+    for k, v in m.lists():
         if len(v) == 1:
             d[k] = v[0]
         else:
