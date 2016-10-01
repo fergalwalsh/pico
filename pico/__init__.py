@@ -72,10 +72,18 @@ class PicoApp(object):
         self.url_map['/app.js'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs)).to_jsonp('pico.load_app_obj')
         for module_name in self.registry:
             url = self.module_url(module_name)
-            self.url_map[url] = lambda **kwargs: JsonResponse(self.module_definition(module_name, **kwargs))
-            self.url_map[url + '.js'] = lambda **kwargs: JsonResponse(self.module_definition(module_name, **kwargs)).to_jsonp('pico.load_module_obj')
+            # generate a json response object with the module definition
+            definition = self.module_definition(module_name)
+            response = JsonResponse(definition)
+            # create a closure with the response object
+            definition_response_function = (lambda r: lambda **kwargs: r)(response)
+            definition_response_function_js = (lambda r: lambda **kwargs: r.to_jsonp('pico.load_module_obj'))(response)
+            # assign defintion response handler to function to urls
+            self.url_map[url] = definition_response_function
+            self.url_map[url + '.js'] = definition_response_function_js
             for func_name, func in self.registry[module_name].items():
                 url = self.func_url(func)
+                # assign the handler function to the the url
                 self.url_map[url] = func
 
     def module_url(self, module_name):
