@@ -68,8 +68,8 @@ class PicoApp(object):
     def _build_url_map(self):
         self.url_map = {}
         self.url_map['/pico.js'] = self.pico_js
-        self.url_map['/app'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs))
-        self.url_map['/app.js'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs)).to_jsonp('pico.load_app_obj')
+        self.url_map['/'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs))
+        self.url_map['/picoapp.js'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs)).to_jsonp('pico.load_app_obj')
         for module_name in self.registry:
             url = self.module_url(module_name)
             # generate a json response object with the module definition
@@ -169,7 +169,7 @@ class PicoApp(object):
 
     def dispatch_request(self, request):
         path = request.path
-        if path[-1] == '/':
+        if len(path) > 1 and path[-1] == '/':
             path = path[:-1]
         request.path = path
         try:
