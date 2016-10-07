@@ -11,6 +11,7 @@ import logging
 import importlib
 import os.path
 from collections import defaultdict
+from functools import partial
 
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.wrappers import Request, Response
@@ -68,52 +69,61 @@ class PicoApp(object):
     def _build_url_map(self):
         self.url_map = {}
         self.url_map['/pico.js'] = self.pico_js
-        self.url_map['/'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs))
-        self.url_map['/picoapp.js'] = lambda **kwargs: JsonResponse(self.app_definition(**kwargs)).to_jsonp('pico.load_app_obj')
+        self.url_map['/'] = self.app_definition_handler
+        self.url_map['/picoapp.js'] = partial(self.app_definition_handler, 'pico.load_app_obj')
         for module_name in self.registry:
             url = self.module_url(module_name)
-            # generate a json response object with the module definition
-            definition = self.module_definition(module_name)
-            response = JsonResponse(definition)
-            # create a closure with the response object
-            definition_response_function = (lambda r: lambda **kwargs: r)(response)
-            definition_response_function_js = (lambda r: lambda **kwargs: r.to_jsonp('pico.load_module_obj'))(response)
-            # assign defintion response handler to function to urls
-            self.url_map[url] = definition_response_function
-            self.url_map[url + '.js'] = definition_response_function_js
+            # assign definition response handler to function to urls
+            self.url_map[url] = partial(self.module_definition_handler, module_name)
+            self.url_map[url + '.js'] = partial(self.module_definition_handler, module_name, 'pico.load_module_obj')
             for func_name, func in self.registry[module_name].items():
                 url = self.func_url(func)
                 # assign the handler function to the the url
                 self.url_map[url] = func
 
-    def module_url(self, module_name):
+    def module_url(self, module_name, pico_url='/'):
         module_path = module_name.replace('.', '/')
-        url = '/{module}'.format(module=module_path)
+        url = '{pico_url}{module}'.format(module=module_path, pico_url=pico_url)
         return url
 
-    def func_url(self, func):
+    def func_url(self, func, pico_url='/'):
         module_path = func.__module__.replace('.', '/')
-        url = '/{module}/{func_name}'.format(module=module_path, func_name=func.__name__)
+        url = '{pico_url}{module}/{func_name}'.format(module=module_path, func_name=func.__name__, pico_url=pico_url)
         return url
 
-    def app_definition(self, **kwargs):
+    def app_definition_handler(self, callback=None, _request=None):
+        app_def = self.app_definition(pico_url=_request.url_root)
+        response = JsonResponse(app_def)
+        if callback:
+            response = response.to_jsonp(callback)
+        return response
+
+    def module_definition_handler(self, module_name, callback=None, _request=None):
+        module_def = self.module_definition(module_name, pico_url=_request.url_root)
+        response = JsonResponse(module_def)
+        if callback:
+            response = response.to_jsonp(callback)
+        return response
+
+    def app_definition(self, pico_url='/'):
         d = {}
+        d['url'] = pico_url
         d['modules'] = []
         for module_name in self.registry:
-            d['modules'].append(self.module_definition(module_name))
+            d['modules'].append(self.module_definition(module_name, pico_url))
         return d
 
-    def module_definition(self, module_name, **kwargs):
+    def module_definition(self, module_name, pico_url='/'):
         d = {}
         d['name'] = module_name
         d['doc'] = self.modules[module_name].__doc__
-        d['url'] = self.module_url(module_name)
+        d['url'] = self.module_url(module_name, pico_url)
         d['functions'] = []
         for func_name, func in self.registry[module_name].items():
-            d['functions'].append(self.function_definition(func))
+            d['functions'].append(self.function_definition(func, pico_url))
         return d
 
-    def function_definition(self, func, **kwargs):
+    def function_definition(self, func, pico_url='/'):
         annotations = dict(func._annotations)
         request_args = annotations.pop('request_args', {})
         a = inspect.getargspec(func)
@@ -125,7 +135,7 @@ class PicoApp(object):
         d = dict(
             name=func.__name__,
             doc=func.__doc__,
-            url=self.func_url(func),
+            url=self.func_url(func, pico_url),
             args=args,
         )
         d.update(annotations)
