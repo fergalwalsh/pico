@@ -8,7 +8,7 @@ from werkzeug.utils import import_string
 
 
 def run_app(app, ip='127.0.0.1', port=4242, use_debugger=True, use_reloader=True, threaded=True):
-    for url in app.url_map:
+    for url in sorted(app.url_map.keys()):
         print(url)
     app.wsgi_app = SharedDataMiddleware(app.wsgi_app, {
         '/': 'static'
@@ -22,6 +22,7 @@ def run_app(app, ip='127.0.0.1', port=4242, use_debugger=True, use_reloader=True
 
 
 if __name__ == '__main__':
+    sys.path.insert(0, '.')
     if len(sys.argv) > 1:
         module_name = sys.argv[1]
         module_name = module_name.split('.py')[0]
