@@ -70,12 +70,12 @@ class PicoApp(object):
         self.url_map = {}
         self.url_map['/pico.js'] = self.pico_js
         self.url_map['/'] = self.app_definition_handler
-        self.url_map['/picoapp.js'] = partial(self.app_definition_handler, 'pico.load_app_obj')
+        self.url_map['/picoapp.js'] = partial(self.app_definition_handler, 'pico.loadAppDefinition')
         for module_name in self.registry:
             url = self.module_url(module_name)
             # assign definition response handler to function to urls
             self.url_map[url] = partial(self.module_definition_handler, module_name)
-            self.url_map[url + '.js'] = partial(self.module_definition_handler, module_name, 'pico.load_module_obj')
+            self.url_map[url + '.js'] = partial(self.module_definition_handler, module_name, 'pico.loadModuleDefinition')
             for func_name, func in self.registry[module_name].items():
                 url = self.func_url(func)
                 # assign the handler function to the the url
