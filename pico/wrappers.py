@@ -1,3 +1,4 @@
+from copy import deepcopy
 from werkzeug.wrappers import Response
 
 from . import pragmaticjson as json
@@ -10,8 +11,9 @@ class JsonResponse(Response):
         super(JsonResponse, self).__init__(*args, **kwargs)
 
     def to_jsonp(self, callback):
-        json_string = self.response[0]
+        r = deepcopy(self)
+        json_string = r.response[0]
         content = u'{callback}({json});'.format(callback=callback, json=json_string)
-        self.set_data(content)
-        self.content_type = u'text/javascript'
-        return self
+        r.set_data(content)
+        r.content_type = u'text/javascript'
+        return r
