@@ -1,25 +1,28 @@
 ##Install
-`pip install pico`
+`pip install git+https://github.com/fergalwalsh/pico.git@dev`
 
 
 ##Write a Python module:
 ```python
 # example.py
+import pico
 from pico import PicoApp
 
-app = PicoApp()
 
-
-@app.expose()
+@pico.expose()
 def hello(who):
     s = "hello %s!" % who
     return s
 
 
-@app.expose()
+@pico.expose()
 def goodbye(who):
     s = "goodbye %s!" % who
     return s
+
+
+app = PicoApp()
+app.register_module(__name__)
 
 ```
 
@@ -40,15 +43,15 @@ def goodbye(who):
 <html>
 <head>
   <title>Pico Example</title>
-    <script src="client.js"></script>
-    <script>
-        pico.load("example");
-    </script>
+    <!-- Load the pico Javascript client, always automatically available at /pico.js -->
+    <script src="/pico.js"></script>
+     <!-- Load our example module -->
+    <script src="/example.js"></script>
 </head>
 <body>
   <p id="message"></p>
   <script>
-  example.hello("Fergal", function(response){
+  example.hello("Fergal").then(function(response){
     document.getElementById('message').innerHTML = response;  
   });
   </script>
@@ -57,12 +60,3 @@ def goodbye(who):
 
 ```
 
-
-
-
-The Pico protocal is very simple so it is also easy to communicate with Pico web services from other languages (e.g. Java, Objective-C for mobile applications). See the client.py for a reference implementation.
-
-See the [wiki](https://github.com/fergalwalsh/pico/wiki) for more information.
-
-
-![](https://nojsstats.appspot.com/UA-34240929-1/github.com)
