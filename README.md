@@ -51,6 +51,7 @@ app.register_module(__name__)
 <body>
   <p id="message"></p>
   <script>
+  var example = pico.importModule('example')
   example.hello("Fergal").then(function(response){
     document.getElementById('message').innerHTML = response;  
   });
