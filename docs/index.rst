@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Pico: Python HTTP APIs for Humans
+Pico: Simple Python HTTP APIs
 ================================
 
 Release v\ |version|. (:ref:`installation`)
@@ -14,21 +14,23 @@ APIs with minimal fuss, overhead and boilerplate code.
 .. code-block:: python
    :caption: example.py
 
+    import pico
     from pico import PicoApp
 
-    app = PicoApp()
-
-
-    @app.expose()
+    @pico.expose()
     def hello(who="world"):
         s = "hello %s!" % who
         return s
 
 
-    @app.expose()
+    @pico.expose()
     def goodbye(who):
         s = "goodbye %s!" % who
         return s
+
+
+    app = PicoApp()
+    app.register_module(__name__)
 
 
 Start the development server::
@@ -51,17 +53,17 @@ Use the Javascript client.
   <html>
   <head>
     <title>Pico Example</title>
-    <script src="client.js"></script>
-    <script>
-      pico.load("example");
-    </script>
+      <!-- Load the pico Javascript client, always automatically available at /pico.js -->
+      <script src="/pico.js"></script>
+       <!-- Load our example module -->
+      <script src="/example.js"></script>
   </head>
   <body>
     <p id="message"></p>
     <script>
-      example.hello("Fergal", function(response){
-        document.getElementById('message').innerHTML = response;  
-      });
+    example.hello("Fergal").then(function(response){
+      document.getElementById('message').innerHTML = response;  
+    });
     </script>
   </body>
   </html>

@@ -19,7 +19,7 @@ Argument Passing
 
 Pico creates a keyword argument dictionary, ``kwargs``, from the `GET` and `POST` parameters in the request object and passes this to the handler function as ``handler(**kwargs)``. The expected parameters for an endpoint are defined by the arguments in the function signature. The usual Python semantics apply for default arguments. It is an error to request an endpoint with parameters it does not expect or to not supply a value for an argument with no default value::
     
-    @app.expose()
+    @pico.expose()
     def hello(who='world'):
         return 'Hello %s' % who
 
@@ -40,9 +40,9 @@ Request Arguments
 
 Most web application backends require access to some properties of the ``Request`` object sooner or later for uses other than accessing GET or POST data. You may need the client IP address, headers, cookies, or some arbitrary value set by some other WSGI middleware. Most frameworks usually provide access to the ``Request`` object as an argument to every handler, a property of the handler class, a `global`, or via a module level function. Pico takes a different approach. 
 
-Any handler function may accept any property of the request object as an argument. The author indicates this to Pico by using the ``@request_arg`` decorator to specify which arguments should be mapped to which properties. When the handler function is called by Pico these arguments are populated with the appropriate values from the ``Request`` object. In this example we need the users IP address::
+Any handler function may accept any property of the request object as an argument. The author indicates this to Pico by using the :py:func:`@request_arg <pico.decorators.request_arg>` decorator to specify which arguments should be mapped to which properties. When the handler function is called by Pico these arguments are populated with the appropriate values from the ``Request`` object. In this example we need the users IP address::
 
-    @app.expose()
+    @pico.expose()
     @request_arg(ip='remote_addr')
     def list_movies(ip):
         client_country = lookup_ip(ip)
@@ -57,7 +57,7 @@ The ``Request`` object in Pico is an instance of `werkzeug.wrappers.Request <htt
 
         curl http://localhost:4242/example/list_movies/?ip="42.42.42.42"
 
-In another situation we may want to get the username of the currently logged in user. We could pass the cookies header and the authentication token header and basic auth header and check each inside our function to see if there is a logged user. This would be quite messy though, especially when we need this value in many different functions. Instead we can use ``@request_arg`` with a helper function to return a computed property of the ``Request`` object::
+In another situation we may want to get the username of the currently logged in user. We could pass the cookies header and the authentication token header and basic auth header and check each inside our function to see if there is a logged user. This would be quite messy though, especially when we need this value in many different functions. Instead we can use :py:func:`@request_arg <pico.decorators.request_arg>` with a helper function to return a computed property of the ``Request`` object::
 
     def current_user(request):
         # check basic_auth
@@ -73,13 +73,13 @@ In another situation we may want to get the username of the currently logged in 
         else:
             ...
 
-    @app.expose()
+    @pico.expose()
     @request_arg(user=current_user)
     def profile(user):
         return Profiles.get(user=user)
 
 
-    @app.expose()
+    @pico.expose()
     @request_arg(user=current_user)
     def save_post(user, post):
         pass
@@ -106,13 +106,13 @@ Protectors
 
 There are other situations where you may need to access properties of the ``Request`` object to check if the function may be called with the used HTTP method, by the current user or from the remote IP address, for example. These checks are part of your application logic but are usually not specific to an individual function and not necessarily related to the actual function being called. For example imagine we have a function to delete posts::
 
-    @app.expose()
+    @pico.expose()
     def delete_post(id):
         # delete the post
 
 We want to restrict this endpoint to `admin` users. We could do the following::
 
-    @app.expose()
+    @pico.expose()
     @request_arg(user=current_user)
     def delete_post(id, user):
         if user in admin_users:
@@ -120,14 +120,14 @@ We want to restrict this endpoint to `admin` users. We could do the following::
         else:
             raise Unauthorized
 
-This works but now we have made our function dependant on a ``user`` even though the actual user isn't relevant to the real logic of the function. If we want to use this function elsewhere in our code we need to pass a admin user as a parameter just to pass the check. Pico provides another decorator to help with this common situation::
+This works but now we have made our function dependant on a ``user`` even though the actual user isn't relevant to the real logic of the function. If we want to use this function elsewhere in our code we need to pass a admin user as a parameter just to pass the check. Pico provides another decorator to help with this common situation: :py:func:`@protected <pico.decorators.protected>`::
 
     def is_admin(request, wrapped, args, kwargs):
         user = current_user(request)
         if user not in admin_users:
             raise Unauthorized
 
-    @app.expose()
+    @pico.expose()
     @protected(is_admin)
     def delete_post(id):
         # delete the post

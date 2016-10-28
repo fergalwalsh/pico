@@ -8,16 +8,14 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
 .. py:module:: pico
 
-.. py:class:: PicoApp
-
-    .. py:decoratormethod:: expose(*args, **kwargs)
+    .. py:decorator:: expose(*args, **kwargs)
 
         Exposes the decorated function via the HTTP API.
 
         Note: This decorator must be the final decorator applied to a function (it must be on top).
 
 
-    .. py:decoratormethod:: before_request(*args, **kwargs)
+    .. py:decorator:: before_request(*args, **kwargs)
 
         Used to decorate a function of the form `f(request)` which is called before every request. Can be used to modify the request object e.g. for setting the `.user` attribute based on cookies or headers.
 
@@ -30,14 +28,14 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
     To pass the request object specify the argument name::
 
-        @app.expose()
+        @pico.expose()
         @request_arg('req')
         def foo(req, something):
             return req.remote_addr
 
     To pass an attribute of the request object specify the argument and attribute as a keyword argument pair::
 
-        @app.expose()
+        @pico.expose()
         @request_arg(ip='remote_addr')
         def foo(ip, something):
             return ip
@@ -48,7 +46,7 @@ Pico includes a number of useful decorators. These decorators all use the `reque
             # do something
             return request.user
 
-        @app.expose()
+        @pico.expose()
         @request_arg(user=get_curent_user)
         def foo(user, something):
             pass
@@ -66,7 +64,7 @@ Pico includes a number of useful decorators. These decorators all use the `reque
             if not request.method == 'POST':
                 raise MethodNotAllowed()
 
-        @app.expose()
+        @pico.expose()
         @protected(post_only)
         def foo():
             pass
@@ -81,7 +79,7 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
     The same example as above::
 
-        @app.expose()
+        @pico.expose()
         @require_method('POST')
         def foo():
             pass
@@ -93,7 +91,7 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
     An example of a streaming generator that yields messages from pubsub::
 
-        @app.expose()
+        @pico.expose()
         @stream()
         def subscribe(channels):
             pubsub = redis.pubsub()
