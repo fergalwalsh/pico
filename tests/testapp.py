@@ -1,3 +1,7 @@
+# coding: utf-8
+
+from __future__ import unicode_literals
+
 import time
 
 import pico
@@ -19,7 +23,7 @@ def multiply(x, y):
 
 @pico.expose()
 def upload(upload):
-    return upload.read()
+    return upload.read().decode()
 
 
 @pico.expose()
@@ -98,6 +102,11 @@ def streamer(n=10):
     for i in range(n):
         yield '%i' % i
         time.sleep(0.5)
+
+
+@pico.expose()
+def fail():
+    raise Exception('ƒéçκ!')
 
 app = PicoApp()
 app.register_module(__name__)

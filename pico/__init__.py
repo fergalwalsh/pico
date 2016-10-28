@@ -5,11 +5,14 @@ Copyright (c) 2012, Fergal Walsh.
 License: BSD
 """
 
+from __future__ import unicode_literals
+
 import sys
 import inspect
 import logging
 import importlib
 import os.path
+from io import open
 from collections import defaultdict
 from functools import partial
 
@@ -19,6 +22,11 @@ from werkzeug.wrappers import Request, Response
 from . import pragmaticjson as json
 from .decorators import json_response
 from .wrappers import JsonResponse
+
+try:
+    unicode
+except NameError:
+    unicode = str
 
 __author__ = 'Fergal Walsh'
 __version__ = '2.0.0-dev'
@@ -53,7 +61,8 @@ class PicoApp(object):
         self.url_map = {}
         self._before_request = None
         path = os.path.dirname((inspect.getfile(inspect.currentframe())))
-        self._pico_js = open(path + '/pico.min.js').read()
+        with open(path + '/pico.min.js') as f:
+            self._pico_js = f.read()
 
     def register_module(self, module, alias=None):
         if type(module) == str:
@@ -173,7 +182,7 @@ class PicoApp(object):
         args.update(_multidict_to_dict(request.files))
         # update and override args with json data
         if 'application/json' in request.headers.get('content-type'):
-            args.update(json.loads(request.data))
+            args.update(json.loads(request.get_data(as_text=True)))
         args['_request'] = request
         return args
 
@@ -207,7 +216,7 @@ class PicoApp(object):
                 exception = {
                     'name': e.name,
                     'code': e.code,
-                    'message': unicode(e.description),
+                    'message': e.description,
 
                 }
                 response = JsonResponse(exception)

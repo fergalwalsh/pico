@@ -36,7 +36,7 @@ class Encoder(json.JSONEncoder):
             obj = self.json_dumpers[type(obj)](obj)
             obj = convert_keys(obj)
             return obj
-        for obj_type, dumper in self.json_dumpers.iteritems():
+        for obj_type, dumper in self.json_dumpers.items():
             if isinstance(obj, obj_type):
                 return dumper(obj)
         if hasattr(obj, 'as_json'):

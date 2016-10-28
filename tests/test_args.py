@@ -1,7 +1,9 @@
+from __future__ import unicode_literals
+
 import unittest
 import json
 
-from StringIO import StringIO
+from io import BytesIO, StringIO
 
 from werkzeug.test import EnvironBuilder
 from werkzeug.wrappers import Request
@@ -52,7 +54,7 @@ class TestPOSTArgs(unittest.TestCase):
             'int_arg': 42,
             'float_arg': 3.14,
             'list_arg': [1, 2, 3],
-            'upload': (StringIO('some file contents'), 'test.txt'),
+            'upload': (BytesIO(b'some file contents'), 'test.txt'),
         }
         builder = EnvironBuilder(
             method='POST',
@@ -76,7 +78,7 @@ class TestPOSTArgs(unittest.TestCase):
 
     def test_file_arg(self):
         args = self.app.parse_args(self.request)
-        self.assertEqual(args['upload'].read(), 'some file contents')
+        self.assertEqual(args['upload'].read(), b'some file contents')
 
     def test_list_arg(self):
         args = self.app.parse_args(self.request)
@@ -91,7 +93,6 @@ class TestGETArgs(unittest.TestCase):
             'int_arg': 42,
             'float_arg': 3.14,
             'list_arg': [1, 2, 3],
-            'upload': (StringIO('some file contents'), 'test.txt'),
         }
         builder = EnvironBuilder(
             method='GET',
