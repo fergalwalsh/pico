@@ -158,9 +158,6 @@ class PicoApp(object):
         response = Response(self._pico_js, content_type='text/javascript')
         return response
 
-    def not_found_handler(self, path):
-        return "404 %s not found" % path
-
     def parse_args(self, request):
         # first we take the GET querystring args
         args = _multidict_to_dict(request.args)
