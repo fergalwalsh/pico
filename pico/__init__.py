@@ -50,9 +50,9 @@ def expose(*args, **kwargs):
     return decorator
 
 
-def before_request(*args, **kwargs):
+def prehandle(*args, **kwargs):
     def decorator(f):
-        sys.modules[f.__module__]._before_request = f
+        sys.modules[f.__module__]._prehandle = f
         return f
     return decorator
 
@@ -63,7 +63,7 @@ class PicoApp(object):
         self.registry = defaultdict(dict)
         self.modules = {}
         self.url_map = {}
-        self._before_request = None
+        self._prehandle = None
         path = os.path.dirname((inspect.getfile(inspect.currentframe())))
         with open(path + '/pico.min.js') as f:
             self._pico_js = f.read()
@@ -203,10 +203,10 @@ class PicoApp(object):
             callback = kwargs.pop('_callback', None)
             if hasattr(handler, '__module__'):
                 module = self.modules.get(handler.__module__)
-                if self._before_request:
-                    self._before_request(request)
-                if hasattr(module, '_before_request'):
-                    module._before_request(request)
+                if self._prehandle:
+                    self._prehandle(request)
+                if hasattr(module, '_prehandle'):
+                    module._prehandle(request)
             result = handler(**kwargs)
             if isinstance(result, Response):
                 response = result

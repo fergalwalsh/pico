@@ -15,9 +15,9 @@ Pico includes a number of useful decorators. These decorators all use the `reque
         Note: This decorator must be the final decorator applied to a function (it must be on top).
 
 
-    .. py:decorator:: before_request(*args, **kwargs)
+    .. py:decorator:: prehandle(*args, **kwargs)
 
-        Used to decorate a function of the form `f(request)` which is called before every request. Can be used to modify the request object e.g. for setting the `.user` attribute based on cookies or headers.
+        Used to decorate a function of the form `f(request, kwargs)` which is called before the handler function is called. Can be used to modify the request object (e.g. for setting the `.user` attribute based on cookies or headers) or the `kwargs` dictionary passed to the the handler function (e.g. to pop out and check a common `token` query parameter sent with every request).
 
 
 .. py:module:: pico.decorators

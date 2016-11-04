@@ -55,8 +55,8 @@ def my_ip3(ip):
     return ip
 
 
-@pico.before_request()
-def set_user(request):
+@pico.prehandle()
+def set_user(request, kwargs):
     request.user = 'arthurd42'
 
 
