@@ -8,16 +8,37 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
 .. py:module:: pico
 
-    .. py:decorator:: expose(*args, **kwargs)
+.. py:decorator:: expose(*args, **kwargs)
 
         Exposes the decorated function via the HTTP API.
 
         Note: This decorator must be the final decorator applied to a function (it must be on top).
 
 
-    .. py:decorator:: prehandle(*args, **kwargs)
+.. py:decorator:: prehandle(*args, **kwargs)
 
-        Used to decorate a function of the form `f(request, kwargs)` which is called before the handler function is called. Can be used to modify the request object (e.g. for setting the `.user` attribute based on cookies or headers) or the `kwargs` dictionary passed to the the handler function (e.g. to pop out and check a common `token` query parameter sent with every request).
+    Used to decorate a function of the form `f(request, kwargs)` which is called before the handler function is called. 
+
+    This can be used to modify the request object (e.g. for setting the `.user` attribute based on cookies or headers) or the `kwargs` dictionary passed to the the handler function (e.g. to pop out and check a common `token` query parameter sent with every request)::
+
+        @pico.prehandle()
+        def set_user(request, kwargs):
+            # check basic_auth
+            if request.authorization:
+                auth = request.authorization
+                if not check_password(auth.username, auth.password):
+                    raise Unauthorized("Incorrect username or password!")
+                request.user = auth.username
+            # check for session cookie
+            elif 'session_id' in request.cookies:
+                user = sessions.get(request.cookies['session_id'])
+                request.user = user['username']
+            elif 'token' in kwargs:
+                token = kwargs.pop('token')
+                user = sessions.get(token)
+                request.user = user['username']
+            else:
+                ...
 
 
 .. py:module:: pico.decorators
