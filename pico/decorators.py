@@ -44,18 +44,6 @@ def request_arg(*args, **kwargs):
     return wrapper
 
 
-def json_response(*args, **kwargs):
-    @base_decorator()
-    def wrapper(wrapped, args, kwargs, request):
-        result = wrapped(*args, **kwargs)
-        if isinstance(result, Response):
-            response = result
-        else:
-            response = JsonResponse(result)
-        return response
-    return wrapper
-
-
 def stream(*args, **kwargs):
     @base_decorator(annotations={'stream': True})
     def wrapper(wrapped, args, kwargs, request):

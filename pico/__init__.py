@@ -20,7 +20,7 @@ from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.wrappers import Request, Response
 
 from . import pragmaticjson as json
-from .decorators import json_response
+from .decorators import base_decorator
 from .wrappers import JsonResponse
 
 try:
@@ -39,8 +39,12 @@ registry = defaultdict(dict)
 
 
 def expose(*args, **kwargs):
+    @base_decorator()
+    def wrapper(wrapped, args, kwargs, request):
+        return wrapped(*args, **kwargs)
+
     def decorator(func):
-        func = json_response()(func)
+        func = wrapper(func)
         registry[func.__module__][func.__name__] = func
         return func
     return decorator
@@ -161,7 +165,11 @@ class PicoApp(object):
         args = self.parse_args(request)
         args.update(kwargs)
         callback = args.pop('_callback', None)
-        response = func(**args)
+        result = func(**args)
+        if isinstance(result, Response):
+            response = result
+        else:
+            response = JsonResponse(result)
         if callback:
             response = response.to_jsonp(callback)
         return response
