@@ -161,9 +161,8 @@ class PicoApp(object):
     def not_found_handler(self, path):
         return "404 %s not found" % path
 
-    def call_function(self, func, request, **kwargs):
+    def call_function(self, func, request):
         args = self.parse_args(request)
-        args.update(kwargs)
         callback = args.pop('_callback', None)
         result = func(**args)
         if isinstance(result, Response):
@@ -210,7 +209,7 @@ class PicoApp(object):
                 return NotFound()
         return self.handle_request(request, handler)
 
-    def handle_request(self, request, handler, **kwargs):
+    def handle_request(self, request, handler):
         try:
             if hasattr(handler, '__module__'):
                 module = self.modules.get(handler.__module__)
@@ -218,7 +217,7 @@ class PicoApp(object):
                     self._before_request(request)
                 if hasattr(module, '_before_request'):
                     module._before_request(request)
-            response = self.call_function(handler, request, **kwargs)
+            response = self.call_function(handler, request)
         except HTTPException as e:
             if not request.accept_mimetypes.accept_html:
                 exception = {
