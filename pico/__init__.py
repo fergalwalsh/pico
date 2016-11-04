@@ -204,9 +204,9 @@ class PicoApp(object):
             if hasattr(handler, '__module__'):
                 module = self.modules.get(handler.__module__)
                 if self._prehandle:
-                    self._prehandle(request)
+                    self._prehandle(request, kwargs)
                 if hasattr(module, '_prehandle'):
-                    module._prehandle(request)
+                    module._prehandle(request, kwargs)
             result = handler(**kwargs)
             if isinstance(result, Response):
                 response = result
