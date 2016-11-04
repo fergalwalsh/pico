@@ -161,18 +161,6 @@ class PicoApp(object):
     def not_found_handler(self, path):
         return "404 %s not found" % path
 
-    def call_function(self, func, request):
-        args = self.parse_args(request)
-        callback = args.pop('_callback', None)
-        result = func(**args)
-        if isinstance(result, Response):
-            response = result
-        else:
-            response = JsonResponse(result)
-        if callback:
-            response = response.to_jsonp(callback)
-        return response
-
     def parse_args(self, request):
         # first we take the GET querystring args
         args = _multidict_to_dict(request.args)
@@ -211,13 +199,21 @@ class PicoApp(object):
 
     def handle_request(self, request, handler):
         try:
+            kwargs = self.parse_args(request)
+            callback = kwargs.pop('_callback', None)
             if hasattr(handler, '__module__'):
                 module = self.modules.get(handler.__module__)
                 if self._before_request:
                     self._before_request(request)
                 if hasattr(module, '_before_request'):
                     module._before_request(request)
-            response = self.call_function(handler, request)
+            result = handler(**kwargs)
+            if isinstance(result, Response):
+                response = result
+            else:
+                response = JsonResponse(result)
+            if callback:
+                response = response.to_jsonp(callback)
         except HTTPException as e:
             if not request.accept_mimetypes.accept_html:
                 exception = {
