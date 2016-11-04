@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pico Example - Simple</title>
+    <!-- Load the pico Javascript client, always automatically available at /pico.js -->
+    <script src="pico.js"></script>
+    <!-- Load our api module proxy-->
+    <script src="/api.js"></script>
+</head>
+<body>
+  <p>This is a very simple example of an 'application' using pico.</p>
+  <p>
+    Name: <input type="text" id="nameInput"/>
+    <button id="submitButton">Submit</button>
+  </p>
+  <p id="message"></p>
+
+  <script>
+  document.getElementById('submitButton').onclick = function(){
+    var name = document.getElementById('nameInput').value;
+    api.hello(name).then(function(response){
+        document.getElementById('message').innerText = response; 
+    });
+  }
+  </script>
+</body>
+</html>
