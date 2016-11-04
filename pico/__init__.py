@@ -255,6 +255,7 @@ class PicoApp(object):
             if path_info.startswith(script_name):
                 environ['PATH_INFO'] = path_info[len(script_name):]
         request = Request(environ)
+        request.app = self
         response = self.dispatch_request(request)
         return response(environ, start_response)
 
