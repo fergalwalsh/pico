@@ -62,6 +62,7 @@ class PicoApp(object):
     def __init__(self):
         self.registry = defaultdict(dict)
         self.modules = {}
+        self.aliases = {}
         self.url_map = {}
         self._prehandle = None
         path = os.path.dirname((inspect.getfile(inspect.currentframe())))
@@ -73,11 +74,13 @@ class PicoApp(object):
             module = importlib.import_module(module)
         module_name = module.__name__
         alias = alias or module_name
+        self.aliases[module_name] = alias
         self.modules[alias] = module
         self.registry[alias] = registry[module_name]
-        for k in self.registry[alias]:
-            self.registry[alias][k].__module__ = alias
         self._build_url_map()
+
+    def _get_alias(self, module_name):
+        return self.aliases.get(module_name, module_name)
 
     def _build_url_map(self):
         self.url_map = {}
@@ -100,7 +103,7 @@ class PicoApp(object):
         return url
 
     def func_url(self, func, pico_url='/'):
-        module_path = func.__module__.replace('.', '/')
+        module_path = self._get_alias(func.__module__).replace('.', '/')
         url = '{pico_url}{module}/{func_name}'.format(module=module_path, func_name=func.__name__, pico_url=pico_url)
         return url
 
@@ -173,7 +176,7 @@ class PicoApp(object):
         # update args with files
         args.update(_multidict_to_dict(request.files))
         # update and override args with json data
-        if 'application/json' in request.headers.get('content-type'):
+        if 'application/json' in request.headers.get('content-type', ''):
             args.update(json.loads(request.get_data(as_text=True)))
         args['_request'] = request
         return args
@@ -199,8 +202,8 @@ class PicoApp(object):
             kwargs = self.parse_args(request)
             callback = kwargs.pop('_callback', None)
             if hasattr(handler, '__module__'):
-                module = self.modules.get(handler.__module__)
-                if self._prehandle:
+                module = self.modules.get(self._get_alias(handler.__module__))
+                if module and self._prehandle:
                     self._prehandle(request, kwargs)
                 if hasattr(module, '_prehandle'):
                     module._prehandle(request, kwargs)
