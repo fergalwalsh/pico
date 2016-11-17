@@ -79,6 +79,9 @@ class PicoApp(object):
         self.registry[alias] = registry[module_name]
         self._build_url_map()
 
+    def set_prehandler(self, prehandler):
+        self._prehandle = prehandler
+
     def _get_alias(self, module_name):
         return self.aliases.get(module_name, module_name)
 
