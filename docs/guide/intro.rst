@@ -40,10 +40,10 @@ Request Arguments
 
 Most web application backends require access to some properties of the ``Request`` object sooner or later for uses other than accessing GET or POST data. You may need the client IP address, headers, cookies, or some arbitrary value set by some other WSGI middleware. Most frameworks usually provide access to the ``Request`` object as an argument to every handler, a property of the handler class, a `global`, or via a module level function. Pico takes a different approach. 
 
-Any handler function may accept any property of the request object as an argument. The author indicates this to Pico by using the :py:func:`@request_arg <pico.decorators.request_arg>` decorator to specify which arguments should be mapped to which properties. When the handler function is called by Pico these arguments are populated with the appropriate values from the ``Request`` object. In this example we need the users IP address::
+Any handler function may accept any property of the request object as an argument. The author indicates this to Pico by using the :py:func:`@request_args <pico.decorators.request_args>` decorator to specify which arguments should be mapped to which properties. When the handler function is called by Pico these arguments are populated with the appropriate values from the ``Request`` object. In this example we need the users IP address::
 
     @pico.expose()
-    @request_arg(ip='remote_addr')
+    @request_args(ip='remote_addr')
     def list_movies(ip):
         client_country = lookup_ip(ip)
         movies = fetch_movies(client_country)
@@ -52,12 +52,12 @@ Any handler function may accept any property of the request object as an argumen
 The ``Request`` object in Pico is an instance of `werkzeug.wrappers.Request <http://werkzeug.pocoo.org/docs/0.11/wrappers/#werkzeug.wrappers.Request>`_ so you can refer to its documentation to see all available attributes.
 
 .. note::
-    If the HTTP client passes a value for an argument mapped with ``@request_arg`` it will be ignored. 
+    If the HTTP client passes a value for an argument mapped with ``@request_args`` it will be ignored. 
     For example the following would **not** give you a list of movies in South Korea::
 
         curl http://localhost:4242/example/list_movies/?ip="42.42.42.42"
 
-In another situation we may want to get the username of the currently logged in user. We could pass the cookies header and the authentication token header and basic auth header and check each inside our function to see if there is a logged user. This would be quite messy though, especially when we need this value in many different functions. Instead we can use :py:func:`@request_arg <pico.decorators.request_arg>` with a helper function to return a computed property of the ``Request`` object::
+In another situation we may want to get the username of the currently logged in user. We could pass the cookies header and the authentication token header and basic auth header and check each inside our function to see if there is a logged user. This would be quite messy though, especially when we need this value in many different functions. Instead we can use :py:func:`@request_args <pico.decorators.request_args>` with a helper function to return a computed property of the ``Request`` object::
 
     def current_user(request):
         # check basic_auth
@@ -74,13 +74,13 @@ In another situation we may want to get the username of the currently logged in 
             ...
 
     @pico.expose()
-    @request_arg(user=current_user)
+    @request_args(user=current_user)
     def profile(user):
         return Profiles.get(user=user)
 
 
     @pico.expose()
-    @request_arg(user=current_user)
+    @request_args(user=current_user)
     def save_post(user, post):
         pass
 
@@ -98,7 +98,7 @@ As you can see this is a normal (contrived) unit test without mocked request obj
 The only exceptions of course are helper functions like ``get_user`` above which operate directly on the ``Request`` object. They should be properly tested with a mock ``Request`` object. There should be very few such functions in a typical application however.
 
 .. note::
-    The arguments specified with ``@request_arg`` are **only** populated when the function is called by Pico. If the function is called directly (inside another function, in a script, in the console, etc) this decorator is a `nop`. 
+    The arguments specified with ``@request_args`` are **only** populated when the function is called by Pico. If the function is called directly (inside another function, in a script, in the console, etc) this decorator is a `nop`. 
 
 
 Protectors
@@ -113,7 +113,7 @@ There are other situations where you may need to access properties of the ``Requ
 We want to restrict this endpoint to `admin` users. We could do the following::
 
     @pico.expose()
-    @request_arg(user=current_user)
+    @request_args(user=current_user)
     def delete_post(id, user):
         if user in admin_users:
             # delete the post
@@ -135,4 +135,4 @@ This works but now we have made our function dependant on a ``user`` even though
 If the protector function (``is_admin``) doesn't return ``False`` or raise an exception then the function is executed as normal. As you can see from the protector's signature it can use any of the request object, function object, ``args`` and ``kwargs`` in its decision to pass or raise.
 
 .. note:: 
-    Just like ``@request_arg``, ``@protected`` is **only** active when Pico calls the function. If it is called directly elsewhere the decorator is a `nop`.
+    Just like ``@request_args``, ``@protected`` is **only** active when Pico calls the function. If it is called directly elsewhere the decorator is a `nop`.

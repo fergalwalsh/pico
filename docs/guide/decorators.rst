@@ -43,21 +43,21 @@ Pico includes a number of useful decorators. These decorators all use the `reque
 
 .. py:module:: pico.decorators
 
-.. py:decorator:: request_arg(*args, **kwargs)
+.. py:decorator:: request_args(*args, **kwargs)
     
     Passes the request object or attribute(s) of the request object to the decorated function. It has 3 different forms; a single argument, string keyword arguments, and functional keyword arguments.
 
     To pass the request object specify the argument name::
 
         @pico.expose()
-        @request_arg('req')
+        @request_args('req')
         def foo(req, something):
             return req.remote_addr
 
     To pass an attribute of the request object specify the argument and attribute as a keyword argument pair::
 
         @pico.expose()
-        @request_arg(ip='remote_addr')
+        @request_args(ip='remote_addr')
         def foo(ip, something):
             return ip
 
@@ -68,7 +68,7 @@ Pico includes a number of useful decorators. These decorators all use the `reque
             return request.user
 
         @pico.expose()
-        @request_arg(user=get_curent_user)
+        @request_args(user=get_curent_user)
         def foo(user, something):
             pass
 

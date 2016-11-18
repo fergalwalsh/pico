@@ -7,7 +7,7 @@ import time
 import pico
 from pico import PicoApp
 
-from pico.decorators import require_method, request_arg, set_cookie, delete_cookie, stream
+from pico.decorators import require_method, request_args, set_cookie, delete_cookie, stream
 from pico.decorators import header, cookie, basic_auth
 
 
@@ -38,19 +38,19 @@ def not_post_only():
 
 
 @pico.expose()
-@request_arg(ip='remote_addr')
+@request_args(ip='remote_addr')
 def my_ip1(ip):
     return ip
 
 
 @pico.expose()
-@request_arg('req')
+@request_args('req')
 def my_ip2(req):
     return req.remote_addr
 
 
 @pico.expose()
-@request_arg(ip=lambda req: req.remote_addr)
+@request_args(ip=lambda req: req.remote_addr)
 def my_ip3(ip):
     return ip
 
@@ -61,19 +61,19 @@ def set_user(request, kwargs):
 
 
 @pico.expose()
-@request_arg(username='user')
+@request_args(username='user')
 def current_user(username):
     return username
 
 
 @pico.expose()
-@request_arg(auth=basic_auth())
+@request_args(auth=basic_auth())
 def basicauth(auth):
     return auth
 
 
 @pico.expose()
-@request_arg(session=cookie('session_id'))
+@request_args(session=cookie('session_id'))
 def session_id(session):
     return session
 
@@ -91,7 +91,7 @@ def end_session():
 
 
 @pico.expose()
-@request_arg(session=header('session-id'))
+@request_args(session=header('session-id'))
 def session_id2(session):
     return session
 

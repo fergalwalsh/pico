@@ -4,7 +4,7 @@ import time
 
 import pico
 from pico import PicoApp
-from pico.decorators import request_arg, set_cookie, delete_cookie, stream
+from pico.decorators import request_args, set_cookie, delete_cookie, stream
 from pico.decorators import header, cookie
 
 from werkzeug.exceptions import Unauthorized, ImATeapot, BadRequest
@@ -38,13 +38,13 @@ def upload(upload, filename):
 
 
 @pico.expose()
-@request_arg(ip='remote_addr')
+@request_args(ip='remote_addr')
 def my_ip(ip):
     return ip
 
 
 @pico.expose()
-@request_arg(ip=lambda req: req.remote_addr)
+@request_args(ip=lambda req: req.remote_addr)
 def my_ip3(ip):
     return ip
 
@@ -60,13 +60,13 @@ def set_user(request, kwargs):
 
 
 @pico.expose()
-@request_arg(username='user')
+@request_args(username='user')
 def current_user(username):
     return username
 
 
 @pico.expose()
-@request_arg(session=cookie('session_id'))
+@request_args(session=cookie('session_id'))
 def session_id(session):
     return session
 
@@ -84,7 +84,7 @@ def end_session():
 
 
 @pico.expose()
-@request_arg(session=header('x-session-id'))
+@request_args(session=header('x-session-id'))
 def session_id2(session):
     return session
 

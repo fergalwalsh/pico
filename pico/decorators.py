@@ -30,7 +30,7 @@ def base_decorator(annotations={}, *args, **kwargs):
     return _base_decorator
 
 
-def request_arg(*args, **kwargs):
+def request_args(*args, **kwargs):
     @base_decorator(annotations={'request_args': kwargs})
     def wrapper(wrapped, innerargs, innerkwargs, request):
         if args:
