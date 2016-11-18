@@ -1,5 +1,4 @@
 import sys
-import importlib
 import socket
 
 from werkzeug.serving import run_simple
@@ -26,5 +25,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         module_name = sys.argv[1]
         module_name = module_name.split('.py')[0]
-        app = import_string(module_name + ':app')
+        if ':' not in module_name:
+            module_name += ':app'
+        app = import_string(module_name)
     run_app(app)
