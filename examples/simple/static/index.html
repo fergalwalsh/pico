@@ -16,6 +16,7 @@
   <p id="message"></p>
 
   <script>
+  var api = pico.importModule('api');
   document.getElementById('submitButton').onclick = function(){
     var name = document.getElementById('nameInput').value;
     api.hello(name).then(function(response){
