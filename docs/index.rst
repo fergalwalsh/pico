@@ -104,6 +104,8 @@ An introduction to Pico and a guide to how to use it.
    guide/decorators
    guide/clientjs
    guide/clientpy
+   guide/deployment
+   guide/development_server
 
 
 
