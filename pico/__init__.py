@@ -135,7 +135,7 @@ class PicoApp(object):
     def module_definition(self, module_name, pico_url='/'):
         d = {}
         d['name'] = module_name
-        d['doc'] = self.modules[module_name].__doc__
+        d['doc'] = inspect.getdoc(self.modules[module_name])
         d['url'] = self.module_url(module_name, pico_url)
         d['functions'] = []
         for func_name, func in self.registry[module_name].items():
@@ -146,14 +146,17 @@ class PicoApp(object):
         annotations = dict(func._annotations)
         request_args = annotations.pop('request_args', {})
         a = inspect.getargspec(func)
-        arg_list_r = reversed(a.args)
-        defaults_list_r = reversed(a.defaults or [None])
-        args = reversed(map(None, arg_list_r, defaults_list_r))
-        args = [{'name': arg[0], 'default': arg[1]} for arg in args]
-        args = filter(lambda x: x['name'] and x['name'] != 'self' and x['name'] not in request_args, args)
+        args = []
+        for i, arg_name in enumerate(a.args):
+            if arg_name and arg_name != 'self' and arg_name not in request_args:
+                arg = {'name': arg_name}
+                di = (len(a.defaults) - len(a.args)) + i
+                if di >= 0:
+                    arg['default'] = a.defaults[di]
+                args.append(arg)
         d = dict(
             name=func.__name__,
-            doc=func.__doc__,
+            doc=inspect.getdoc(func),
             url=self.func_url(func, pico_url),
             args=args,
         )

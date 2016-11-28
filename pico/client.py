@@ -19,6 +19,10 @@ __author__ = 'Fergal Walsh'
 __version__ = '2.0.0-dev'
 
 
+class PicoException(Exception):
+    pass
+
+
 class PicoClient(object):
     def __init__(self, url):
         self.url = url
@@ -31,13 +35,15 @@ class PicoClient(object):
         timeout = timeout or self.session.timeout
         if timeout < 0:
             timeout = None
-        headers.update({'content-type': 'application/json'})
+        headers.update({
+            'content-type': 'application/json',
+            'accept': 'application/json',
+        })
         body = json.dumps(args)
         r = self.session.post(url, data=body, timeout=timeout, headers=headers)
-        r.raise_for_status()
         data = r.json()
-        if isinstance(data, dict) and 'exception' in data:
-            raise Exception(data['exception'])
+        if not r.ok:
+            raise PicoException(data['message'])
         else:
             return data
 
@@ -79,7 +85,7 @@ class PicoClient(object):
         module.__doc__ = module_def['doc']
         module._pico_client = self
         for function_def in module_def['functions']:
-            args = [(arg['name'], arg['default']) for arg in function_def['args']] + [('_timeout', None), ('_headers', {})]
+            args = [(arg['name'], arg.get('default', None)) for arg in function_def['args']] + [('_timeout', None), ('_headers', {})]
             args_string = ', '.join(["%s=%r" % (a, d) for a, d in args])
             code = 'def {name}({arg_string}):\n'
             code += '    """ {docstring} """\n'
