@@ -7,9 +7,7 @@ from werkzeug.utils import import_string
 
 
 def run_app(app, ip='127.0.0.1', port=4242, use_debugger=True, use_reloader=True, threaded=True):
-    for url in sorted(app.url_map.keys()):
-        print(url)
-    app.wsgi_app = SharedDataMiddleware(app.wsgi_app, {
+    app = SharedDataMiddleware(app, {
         '/': 'static'
     })
     while True:
