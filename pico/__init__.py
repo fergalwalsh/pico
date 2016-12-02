@@ -183,7 +183,9 @@ class PicoApp(object):
         args.update(_multidict_to_dict(request.files))
         # update and override args with json data
         if 'application/json' in request.headers.get('content-type', ''):
-            args.update(json.loads(request.get_data(as_text=True)))
+            data = request.get_data(as_text=True)
+            if data:
+                args.update(json.loads(data))
         args['_request'] = request
         return args
 
