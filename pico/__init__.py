@@ -16,7 +16,7 @@ from io import open
 from collections import defaultdict
 from functools import partial
 
-from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.exceptions import HTTPException, NotFound, BadRequest
 from werkzeug.wrappers import Request, Response
 
 from . import pragmaticjson as json
@@ -62,6 +62,7 @@ class PicoApp(object):
     def __init__(self):
         self.registry = defaultdict(dict)
         self.modules = {}
+        self.definitions = {}
         self.aliases = {}
         self.url_map = {}
         self._prehandle = None
@@ -77,6 +78,9 @@ class PicoApp(object):
         self.aliases[module_name] = alias
         self.modules[alias] = module
         self.registry[alias] = registry[module_name]
+        self.definitions[alias] = {}
+        for func_name, func in self.registry[alias].items():
+            self.definitions[alias][func_name] = self.function_definition(func)
         self._build_url_map()
 
     def set_prehandler(self, prehandler):
@@ -139,7 +143,9 @@ class PicoApp(object):
         d['url'] = self.module_url(module_name, pico_url)
         d['functions'] = []
         for func_name, func in self.registry[module_name].items():
-            d['functions'].append(self.function_definition(func, pico_url))
+            func_def = dict(self.definitions[module_name][func_name])
+            func_def['url'] = self.func_url(func, pico_url)
+            d['functions'].append(func_def)
         return d
 
     def function_definition(self, func, pico_url='/'):
@@ -150,7 +156,7 @@ class PicoApp(object):
         for i, arg_name in enumerate(a.args):
             if arg_name and arg_name != 'self' and arg_name not in request_args:
                 arg = {'name': arg_name}
-                di = (len(a.defaults) - len(a.args)) + i
+                di = (len(a.defaults or []) - len(a.args)) + i
                 if di >= 0:
                     arg['default'] = a.defaults[di]
                 args.append(arg)
@@ -160,6 +166,8 @@ class PicoApp(object):
             url=self.func_url(func, pico_url),
             args=args,
         )
+        if a.keywords is not None:
+            d['accept_extra_args'] = True
         d.update(annotations)
         return d
 
@@ -205,6 +213,20 @@ class PicoApp(object):
                 return NotFound()
         return self.handle_request(request, handler)
 
+    def check_args(self, handler, kwargs):
+        module_name = self._get_alias(handler.__module__)
+        func_def = self.definitions[module_name][handler.__name__]
+        args = {a['name']: a for a in func_def['args']}
+        missing = [k for k in (set(args.keys()) - set(kwargs.keys())) if 'default' not in args[k]]
+        extra = [k for k in (set(kwargs.keys()) - set(args.keys())) if k[0] != '_']
+        message = ''
+        if extra and not func_def.get('accept_extra_args', False):
+            message += 'Unexpected parameters: [%s]. ' % ', '.join(extra)
+        if missing:
+            message += 'Missing required parameters: [%s]. ' % ', '.join(missing)
+        if message:
+            raise BadRequest(message)
+
     def handle_request(self, request, handler):
         try:
             kwargs = self.parse_args(request)
@@ -215,6 +237,7 @@ class PicoApp(object):
                     self._prehandle(request, kwargs)
                 if hasattr(module, '_prehandle'):
                     module._prehandle(request, kwargs)
+                self.check_args(handler, kwargs)
             result = handler(**kwargs)
             if isinstance(result, Response):
                 response = result
