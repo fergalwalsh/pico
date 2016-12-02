@@ -9,7 +9,6 @@ from __future__ import unicode_literals
 
 import sys
 import inspect
-import logging
 import importlib
 import os.path
 from io import open
@@ -30,9 +29,6 @@ except NameError:
 
 __author__ = 'Fergal Walsh'
 __version__ = '2.0.0-dev'
-
-logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())
 
 
 registry = defaultdict(dict)
@@ -251,31 +247,15 @@ class PicoApp(object):
                     'name': e.name,
                     'code': e.code,
                     'message': e.description,
-
                 }
                 response = JsonResponse(exception)
                 response.status = '%s %s' % (e.code, e.name)
                 return response
             return e
         except Exception as e:
-            tags = {
-                'module_name': getattr(handler, '__module__', None),
-                'function_name': getattr(handler, '__name__', None),
-            }
-            logger.error(e,
-                         exc_info=True,
-                         extra={'data': dict(tags), 'tags': dict(tags)})
-            if not request.accept_mimetypes.accept_html:
-                exception = {
-                    'name': type(e).__name__,
-                    'code': 500,
-                    'message': unicode(e),
-
-                }
-                response = JsonResponse(exception)
-                response.status = '500 Internal Server Error'
-            else:
-                raise
+            # we allow all other exceptions to raise and be caught
+            # by wsgi middleware or the application server
+            raise
         return response
 
     def wsgi_app(self, environ, start_response):
