@@ -8,13 +8,6 @@ Pico includes a development server, based on Werkzeug's amazing development serv
 To start a Pico application with the development server simply run::
 
     $ python -m pico.server myapp
-
-    /
-    /api
-    /api.js
-    /api/hello
-    /pico.js
-    /picoapp.js
      * Running on http://127.0.0.1:4242/ (Press CTRL+C to quit)
      * Restarting with fsevents reloader
 
