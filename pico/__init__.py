@@ -15,12 +15,12 @@ from io import open
 from collections import defaultdict
 from functools import partial
 
-from werkzeug.exceptions import HTTPException, NotFound, BadRequest
+from werkzeug.exceptions import HTTPException, NotFound, BadRequest, InternalServerError
 from werkzeug.wrappers import Request, Response
 
 from . import pragmaticjson as json
 from .decorators import base_decorator
-from .wrappers import JsonResponse
+from .wrappers import JsonResponse, JsonErrorResponse
 
 try:
     unicode
@@ -222,6 +222,10 @@ class PicoApp(object):
     def prehandle(self, request, kwargs):
         pass
 
+    def handle_exception(self, exception, request, **kwargs):
+        e = InternalServerError()
+        return JsonErrorResponse(e, **kwargs)
+
     def handle_request(self, request, handler):
         try:
             kwargs = self.parse_args(request)
@@ -241,20 +245,9 @@ class PicoApp(object):
             if callback:
                 response = response.to_jsonp(callback)
         except HTTPException as e:
-            if not request.accept_mimetypes.accept_html:
-                exception = {
-                    'name': e.name,
-                    'code': e.code,
-                    'message': e.description,
-                }
-                response = JsonResponse(exception)
-                response.status = '%s %s' % (e.code, e.name)
-                return response
-            return e
+            return JsonErrorResponse(e)
         except Exception as e:
-            # we allow all other exceptions to raise and be caught
-            # by wsgi middleware or the application server
-            raise
+            return self.handle_exception(e, request)
         return response
 
     def wsgi_app(self, environ, start_response):

@@ -1,7 +1,13 @@
 from copy import deepcopy
 from werkzeug.wrappers import Response
+from werkzeug.exceptions import HTTPException
 
 from . import pragmaticjson as json
+
+try:
+    unicode
+except NameError:
+    unicode = str
 
 
 class JsonResponse(Response):
@@ -17,3 +23,28 @@ class JsonResponse(Response):
         r.set_data(content)
         r.content_type = u'text/javascript'
         return r
+
+
+class JsonErrorResponse(JsonResponse):
+    def __init__(self, exception=None, **kwargs):
+        result = {}
+        if exception:
+            if hasattr(exception, 'to_dict'):
+                result = exception.to_dict()
+            elif isinstance(exception, HTTPException):
+                result = {
+                    'name': exception.name,
+                    'code': exception.code,
+                    'message': exception.description,
+                }
+            else:
+                result = {
+                    'name': type(exception).__name__,
+                    'code': 500,
+                    'message': unicode(exception),
+                }
+        result.update(kwargs)
+        result['code'] = result.get('code', 500)
+        result['name'] = result.get('name', 'Internal Server Error')
+        super(JsonErrorResponse, self).__init__(result)
+        self.status = '%s %s' % (result['code'], result['name'])
