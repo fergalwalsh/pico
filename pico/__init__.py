@@ -61,7 +61,6 @@ class PicoApp(object):
         self.definitions = {}
         self.aliases = {}
         self.url_map = {}
-        self._prehandle = None
         path = os.path.dirname((inspect.getfile(inspect.currentframe())))
         with open(path + '/pico.min.js') as f:
             self._pico_js = f.read()
@@ -78,9 +77,6 @@ class PicoApp(object):
         for func_name, func in self.registry[alias].items():
             self.definitions[alias][func_name] = self.function_definition(func)
         self._build_url_map()
-
-    def set_prehandler(self, prehandler):
-        self._prehandle = prehandler
 
     def _get_alias(self, module_name):
         return self.aliases.get(module_name, module_name)
@@ -223,14 +219,17 @@ class PicoApp(object):
         if message:
             raise BadRequest(message)
 
+    def prehandle(self, request, kwargs):
+        pass
+
     def handle_request(self, request, handler):
         try:
             kwargs = self.parse_args(request)
             callback = kwargs.pop('_callback', None)
-            if hasattr(handler, '__module__'):
+            if hasattr(handler, '__module__') and handler.__module__ in self.aliases:
                 module = self.modules.get(self._get_alias(handler.__module__))
-                if module and self._prehandle:
-                    self._prehandle(request, kwargs)
+                if module and self.prehandle:
+                    self.prehandle(request, kwargs)
                 if hasattr(module, '_prehandle'):
                     module._prehandle(request, kwargs)
                 self.check_args(handler, kwargs)
