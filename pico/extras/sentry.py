@@ -7,7 +7,7 @@ def set_context(client, request):
         'query_string': request.query_string,
         'data': request.get_data(),
         'headers': dict(request.headers),
-        'env': dict(request.environ),
+
     })
     if request.authorization:
         client.user_context({
