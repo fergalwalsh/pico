@@ -223,8 +223,11 @@ class PicoApp(object):
         pass
 
     def handle_exception(self, exception, request, **kwargs):
-        e = InternalServerError()
-        return JsonErrorResponse(e, **kwargs)
+        if isinstance(exception, HTTPException):
+            return JsonErrorResponse(exception)
+        else:
+            e = InternalServerError()
+            return JsonErrorResponse(e, **kwargs)
 
     def handle_request(self, request, handler):
         try:
@@ -244,8 +247,6 @@ class PicoApp(object):
                 response = JsonResponse(result)
             if callback:
                 response = response.to_jsonp(callback)
-        except HTTPException as e:
-            return JsonErrorResponse(e)
         except Exception as e:
             return self.handle_exception(e, request)
         return response
