@@ -18,9 +18,6 @@ def set_context(client, request):
 class SentryMixin(object):
     sentry_client = None
 
-    def __init__(self):
-        super(SentryMixin, self).__init__()
-
     def prehandle(self, request, kwargs):
         if self.sentry_client:
             set_context(self.sentry_client, request)

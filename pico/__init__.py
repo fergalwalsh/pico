@@ -8,6 +8,7 @@ License: BSD
 from __future__ import unicode_literals
 
 import sys
+import traceback
 import inspect
 import importlib
 import os.path
@@ -55,7 +56,8 @@ def prehandle(*args, **kwargs):
 
 class PicoApp(object):
 
-    def __init__(self):
+    def __init__(self, debug=False):
+        self.debug = debug
         self.registry = defaultdict(dict)
         self.modules = {}
         self.definitions = {}
@@ -227,6 +229,17 @@ class PicoApp(object):
             return JsonErrorResponse(exception)
         else:
             e = InternalServerError()
+            if self.debug:
+                _, _, exc_tb = sys.exc_info()
+                trace = traceback.extract_tb(exc_tb)
+                trace = ['%s:%i in %s: %s' % t for t in trace if '/pico/' not in t[0]]
+                del exc_tb
+                d = dict(
+                    name=type(exception).__name__,
+                    message=unicode(exception),
+                    stack_trace=trace,
+                )
+                kwargs['__debug__'] = d
             return JsonErrorResponse(e, **kwargs)
 
     def handle_request(self, request, handler):
