@@ -29,5 +29,5 @@ class SentryMixin(object):
             if sentry_id:
                 # The sentry_id is passed down to pico's JsonErrorResponse so it is
                 #  included as a value in the response.
-                kwargs['sentry_id'] = sentry_id
+                kwargs['sentry_id'] = sentry_id[0]
         return super(SentryMixin, self).handle_exception(exception, request, **kwargs)
