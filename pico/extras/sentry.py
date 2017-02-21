@@ -28,7 +28,9 @@ class SentryMixin(object):
 
     def handle_exception(self, exception, request, **kwargs):
         if self.sentry_client:
-            # The sentry_id is passed down to pico's JsonErrorResponse so it is
-            #  included as a value in the response.
-            kwargs['sentry_id'] = self.sentry_client.captureException()
+            sentry_id = self.sentry_client.captureException()
+            if sentry_id:
+                # The sentry_id is passed down to pico's JsonErrorResponse so it is
+                #  included as a value in the response.
+                kwargs['sentry_id'] = sentry_id
         return super(SentryMixin, self).handle_exception(exception, request, **kwargs)
