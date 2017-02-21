@@ -222,12 +222,17 @@ class PicoApp(object):
             raise BadRequest(message)
 
     def prehandle(self, request, kwargs):
-        pass
+        if self.debug and kwargs.pop('_debug', None):
+            request.use_debugger = True
+        else:
+            request.use_debugger = False
 
     def handle_exception(self, exception, request, **kwargs):
         if isinstance(exception, HTTPException):
             return JsonErrorResponse(exception)
         else:
+            if request.use_debugger:
+                raise
             e = InternalServerError()
             if self.debug:
                 _, _, exc_tb = sys.exc_info()
