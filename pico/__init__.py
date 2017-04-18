@@ -227,6 +227,9 @@ class PicoApp(object):
         else:
             request.use_debugger = False
 
+    def posthandle(self, request, response):
+        pass
+
     def handle_exception(self, exception, request, **kwargs):
         if isinstance(exception, HTTPException):
             return JsonErrorResponse(exception)
@@ -266,7 +269,9 @@ class PicoApp(object):
             if callback:
                 response = response.to_jsonp(callback)
         except Exception as e:
-            return self.handle_exception(e, request)
+            response = self.handle_exception(e, request)
+        finally:
+            self.posthandle(request, response)
         return response
 
     def wsgi_app(self, environ, start_response):
