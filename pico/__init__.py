@@ -11,6 +11,7 @@ import sys
 import traceback
 import inspect
 import importlib
+import logging
 import os.path
 from io import open
 from collections import defaultdict
@@ -22,6 +23,9 @@ from werkzeug.wrappers import Request, Response
 from . import pragmaticjson as json
 from .decorators import base_decorator
 from .wrappers import JsonResponse, JsonErrorResponse
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 try:
     unicode
@@ -178,18 +182,30 @@ class PicoApp(object):
         for k in args:
             if isinstance(args[k], list):
                 for i, v in enumerate(args[k]):
-                    args[k][i] = json.try_loads(v)
+                    args[k][i] = self._try_json_load(v)
             else:
-                args[k] = json.try_loads(args[k])
+                args[k] = self._try_json_load(args[k])
         # update args with files
         args.update(_multidict_to_dict(request.files))
         # update and override args with json data
         if 'application/json' in request.headers.get('content-type', ''):
             data = request.get_data(as_text=True)
             if data:
-                args.update(json.loads(data))
+                args.update(self.json_load(data))
         args['_request'] = request
         return args
+
+    def json_load(self, value):
+        return json.loads(value)
+
+    def json_dump(self, value):
+        return json.dumps(value)
+
+    def _try_json_load(self, value):
+        try:
+            return self.json_load(value)
+        except ValueError:
+            return value
 
     def dispatch_request(self, request):
         path = request.path
@@ -265,10 +281,11 @@ class PicoApp(object):
             if isinstance(result, Response):
                 response = result
             else:
-                response = JsonResponse(result)
+                response = JsonResponse(result, app=self)
             if callback:
                 response = response.to_jsonp(callback)
         except Exception as e:
+            logger.exception(e)
             response = self.handle_exception(e, request)
         finally:
             self.posthandle(request, response)

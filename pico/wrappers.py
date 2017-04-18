@@ -12,7 +12,11 @@ except NameError:
 
 class JsonResponse(Response):
     def __init__(self, result, *args, **kwargs):
-        kwargs['response'] = json.dumps(result)
+        if kwargs.get('app'):
+            app = kwargs.pop('app')
+            kwargs['response'] = app.json_dump(result)
+        else:
+            kwargs['response'] = json.dumps(result)
         kwargs['content_type'] = u'application/json'
         super(JsonResponse, self).__init__(*args, **kwargs)
 
