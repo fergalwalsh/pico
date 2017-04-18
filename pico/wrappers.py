@@ -29,9 +29,7 @@ class JsonErrorResponse(JsonResponse):
     def __init__(self, exception=None, **kwargs):
         result = {}
         if exception:
-            if hasattr(exception, 'to_dict'):
-                result = exception.to_dict()
-            elif isinstance(exception, HTTPException):
+            if isinstance(exception, HTTPException):
                 result = {
                     'name': exception.name,
                     'code': exception.code,
@@ -43,8 +41,12 @@ class JsonErrorResponse(JsonResponse):
                     'code': 500,
                     'message': unicode(exception),
                 }
+        if hasattr(exception, 'to_dict'):
+            data = exception.to_dict()
+        else:
+            data = result
         result.update(kwargs)
         result['code'] = result.get('code', 500)
         result['name'] = result.get('name', 'Internal Server Error')
-        super(JsonErrorResponse, self).__init__(result)
+        super(JsonErrorResponse, self).__init__(data)
         self.status = '%s %s' % (result['code'], result['name'])
