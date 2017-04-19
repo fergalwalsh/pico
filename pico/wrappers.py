@@ -49,7 +49,7 @@ class JsonErrorResponse(JsonResponse):
             data = exception.to_dict()
         else:
             data = result
-        result.update(kwargs)
+        data.update(kwargs)
         result['code'] = result.get('code', 500)
         result['name'] = result.get('name', 'Internal Server Error')
         super(JsonErrorResponse, self).__init__(data)

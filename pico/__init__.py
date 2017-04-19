@@ -248,8 +248,9 @@ class PicoApp(object):
 
     def handle_exception(self, exception, request, **kwargs):
         if isinstance(exception, HTTPException):
-            return JsonErrorResponse(exception)
+            return JsonErrorResponse(exception, **kwargs)
         else:
+            logger.exception(exception)
             if request.use_debugger:
                 raise
             e = InternalServerError()
@@ -285,7 +286,6 @@ class PicoApp(object):
             if callback:
                 response = response.to_jsonp(callback)
         except Exception as e:
-            logger.exception(e)
             response = self.handle_exception(e, request)
         finally:
             self.posthandle(request, response)
