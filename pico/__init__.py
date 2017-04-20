@@ -282,7 +282,7 @@ class PicoApp(object):
             if isinstance(result, Response):
                 response = result
             else:
-                response = JsonResponse(result, app=self)
+                response = JsonResponse(json_string=self.json_dump(result))
             if callback:
                 response = response.to_jsonp(callback)
         except Exception as e:
