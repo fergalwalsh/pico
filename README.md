@@ -1,8 +1,8 @@
-##Install
+## Install
 `pip install --upgrade pico`
 
 
-##Write a Python module:
+## Write a Python module:
 ```python
 # example.py
 import pico
@@ -30,13 +30,13 @@ app.register_module(__name__)
 `python -m pico.server example`
 
 
-##Call your http api functions from with any http client:
+## Call your http api functions from with any http client:
 `curl http://localhost:4242/example/hello/?who="fergal"`
 
 `curl http://localhost:4242/example/goodbye/?who="fergal"`
 
 
-##Or use the Javascript client:
+## Or use the Javascript client:
 
 ```html
 <!DOCTYPE HTML>
