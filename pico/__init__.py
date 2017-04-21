@@ -33,7 +33,7 @@ except NameError:
     unicode = str
 
 __author__ = 'Fergal Walsh'
-__version__ = '2.0.0-dev'
+__version__ = '2.0.0'
 
 
 registry = defaultdict(dict)

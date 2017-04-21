@@ -1,5 +1,5 @@
 ##Install
-`pip install git+https://github.com/fergalwalsh/pico.git@dev`
+`pip install --upgrade pico`
 
 
 ##Write a Python module:
