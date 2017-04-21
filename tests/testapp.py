@@ -106,7 +106,7 @@ def streamer(n=10):
 
 @pico.expose()
 def fail():
-    raise Exception('ƒéçκ!')
+    raise Exception('oops!')
 
 app = PicoApp()
 app.register_module(__name__)

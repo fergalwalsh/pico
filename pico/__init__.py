@@ -148,7 +148,7 @@ class PicoApp(object):
 
     def function_definition(self, func, pico_url='/'):
         annotations = dict(func._annotations)
-        request_args = annotations.pop('request_args', {})
+        request_args = set(annotations.pop('request_args', []))
         a = inspect.getargspec(func)
         args = []
         for i, arg_name in enumerate(a.args):
