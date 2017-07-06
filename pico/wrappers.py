@@ -21,7 +21,7 @@ class JsonResponse(Response):
 
     def to_jsonp(self, callback):
         r = deepcopy(self)
-        json_string = r.response[0]
+        json_string = r.response[0].decode()
         content = u'{callback}({json});'.format(callback=callback, json=json_string)
         r.set_data(content)
         r.content_type = u'text/javascript'
