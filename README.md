@@ -36,7 +36,7 @@ app.register_module(__name__)
 `curl http://localhost:4242/example/goodbye/?who="fergal"`
 
 
-## Or use the Javascript client:
+## Using the Javascript client:
 
 ```html
 <!DOCTYPE HTML>
@@ -61,3 +61,12 @@ app.register_module(__name__)
 
 ```
 
+## Using the Python client:
+
+```python
+import pico.client
+
+example = pico.client.load('http://localhost:4242/example')
+example.hello('World')
+
+```

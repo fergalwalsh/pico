@@ -68,6 +68,19 @@ Use the Javascript client.
   </body>
   </html>
 
+
+Use the Python client.
+
+.. code-block:: python
+  :caption: client.py
+
+  import pico.client
+  
+  example = pico.client.load('http://localhost:4242/example')
+  example.hello('World')
+
+
+
 .. _features:
 
 Features
