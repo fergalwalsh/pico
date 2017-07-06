@@ -41,7 +41,10 @@ class PicoClient(object):
         })
         body = json.dumps(args)
         r = self.session.post(url, data=body, timeout=timeout, headers=headers)
-        data = r.json()
+        try:
+            data = r.json()
+        except ValueError:
+            r.raise_for_status()
         if not r.ok:
             raise PicoException(data['message'])
         else:
