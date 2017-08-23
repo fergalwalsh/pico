@@ -24,8 +24,9 @@ from . import pragmaticjson as json
 from .decorators import base_decorator
 from .wrappers import JsonResponse, JsonErrorResponse
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 
 try:
     unicode

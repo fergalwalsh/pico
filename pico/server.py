@@ -1,9 +1,12 @@
+import logging
 import sys
 import socket
 
 from werkzeug.serving import run_simple
 from werkzeug.wsgi import SharedDataMiddleware
 from werkzeug.utils import import_string
+
+logging.basicConfig(level=logging.INFO)
 
 
 def run_app(app, ip='127.0.0.1', port=4242, use_debugger=True, use_reloader=True, threaded=True):
