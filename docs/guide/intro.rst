@@ -118,14 +118,14 @@ We want to restrict this endpoint to `admin` users. We could do the following::
         if user in admin_users:
             # delete the post
         else:
-            raise Unauthorized
+            raise Forbidden
 
 This works but now we have made our function dependant on a ``user`` even though the actual user isn't relevant to the real logic of the function. If we want to use this function elsewhere in our code we need to pass a admin user as a parameter just to pass the check. Pico provides another decorator to help with this common situation: :py:func:`@protected <pico.decorators.protected>`::
 
     def is_admin(request, wrapped, args, kwargs):
         user = current_user(request)
         if user not in admin_users:
-            raise Unauthorized
+            raise Forbidden
 
     @pico.expose()
     @protected(is_admin)
