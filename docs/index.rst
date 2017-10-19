@@ -119,6 +119,7 @@ An introduction to Pico and a guide to how to use it.
    guide/clientpy
    guide/deployment
    guide/development_server
+   guide/errorhandling
 
 
 
