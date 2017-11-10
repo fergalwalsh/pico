@@ -24,11 +24,11 @@ class PicoException(Exception):
 
 
 class PicoClient(object):
-    def __init__(self, url, headers=None):
+    def __init__(self, url, headers={}):
         self.url = url
         self.session = requests.Session()
         self.session.timeout = 60.0
-        self.headers = headers or {}
+        self.session.headers.update(headers)
 
     def _request(self, url, args={}, timeout=None, headers={}):
         if not url.startswith('http'):
@@ -36,8 +36,7 @@ class PicoClient(object):
         timeout = timeout or self.session.timeout
         if timeout < 0:
             timeout = None
-        request_headers = dict(self.headers)
-        request_headers.update(headers)
+        request_headers = dict(headers)
         request_headers.update({
             'content-type': 'application/json',
             'accept': 'application/json',
