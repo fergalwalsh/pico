@@ -26,6 +26,8 @@ class PicoException(Exception):
 class PicoClient(object):
     def __init__(self, url, headers={}):
         self.url = url
+        if self.url[-1] != '/':
+            self.url += '/'
         self.session = requests.Session()
         self.session.timeout = 60.0
         self.session.headers.update(headers)
@@ -77,7 +79,7 @@ class PicoClient(object):
         Load a remote module
         example = client.load("example")
         """
-        module_dict = self._request(self.url + '/' + module_name.replace('.', '/'))
+        module_dict = self._request(self.url + module_name.replace('.', '/'))
         return self.load_from_dict(module_dict)
 
     def load_from_dict(self, module_def):
