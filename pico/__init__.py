@@ -244,6 +244,11 @@ class PicoApp(object):
         else:
             request.use_debugger = False
 
+        try:
+            request.token = request.headers.get('Authorization', '').split('Token ')[-1]
+        except Exception:
+            request.token = None
+
     def posthandle(self, request, response):
         pass
 

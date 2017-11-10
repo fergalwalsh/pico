@@ -112,6 +112,12 @@ class PicoClient(object):
             exec(code, module.__dict__)
         return module
 
+    def set_auth_token(self, token):
+        self.session.headers['Authorization'] = 'Token %s' % token
+
+    def set_auth_basic(self, username, password):
+        self.session.auth = (username, password)
+
 
 def load(module_url):
     url, module_name = module_url.rsplit('/', 1)
