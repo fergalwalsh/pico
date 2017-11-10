@@ -15,9 +15,6 @@ import pico.pragmaticjson as json
 import imp
 import requests
 
-__author__ = 'Fergal Walsh'
-__version__ = '2.0.1'
-
 
 class PicoException(Exception):
     pass
@@ -117,6 +114,10 @@ class PicoClient(object):
 
     def set_auth_basic(self, username, password):
         self.session.auth = (username, password)
+
+    def clear_auth(self):
+        self.session.auth = None
+        self.session.headers.pop('Authorization', None)
 
 
 def load(module_url):
