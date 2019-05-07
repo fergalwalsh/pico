@@ -263,7 +263,7 @@ class PicoApp(object):
             if self.debug:
                 _, _, exc_tb = sys.exc_info()
                 trace = traceback.extract_tb(exc_tb)
-                trace = ['%s:%i in %s: %s' % t for t in trace if '/pico/' not in t[0]]
+                trace = ['%s:%i in %s: %s' % tuple(t) for t in trace if '/pico/' not in t[0]]
                 del exc_tb
                 d = dict(
                     name=type(exception).__name__,
