@@ -3,7 +3,8 @@ import sys
 import socket
 
 from werkzeug.serving import run_simple
-from werkzeug.wsgi import SharedDataMiddleware
+#from werkzeug.wsgi import SharedDataMiddleware
+from werkzeug.middleware.shared_data import SharedDataMiddleware
 from werkzeug.utils import import_string
 
 logging.basicConfig(level=logging.INFO)
