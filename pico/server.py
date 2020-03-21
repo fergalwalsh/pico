@@ -30,4 +30,10 @@ if __name__ == '__main__':
         if ':' not in module_name:
             module_name += ':app'
         app = import_string(module_name)
-    run_app(app)
+
+        try:
+          server_ip = sys.argv[2]
+        except Exception:
+          server_ip = '127.0.0.1'
+
+    run_app(app, server_ip)
