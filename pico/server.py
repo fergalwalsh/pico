@@ -31,9 +31,9 @@ if __name__ == '__main__':
             module_name += ':app'
         app = import_string(module_name)
 
-        try:
-          server_ip = sys.argv[2]
-        except Exception:
-          server_ip = '127.0.0.1'
+    if len(sys.argv) > 2:
+        server_ip = sys.argv[2]
+    else:
+        server_ip = '127.0.0.1'
 
     run_app(app, server_ip)
