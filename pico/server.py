@@ -3,7 +3,7 @@ import sys
 import socket
 
 from werkzeug.serving import run_simple
-from werkzeug.wsgi import SharedDataMiddleware
+from werkzeug.middleware.shared_data import SharedDataMiddleware
 from werkzeug.utils import import_string
 
 logging.basicConfig(level=logging.INFO)
@@ -29,4 +29,10 @@ if __name__ == '__main__':
         if ':' not in module_name:
             module_name += ':app'
         app = import_string(module_name)
-    run_app(app)
+
+    if len(sys.argv) > 2:
+        server_ip = sys.argv[2]
+    else:
+        server_ip = '127.0.0.1'
+
+    run_app(app, server_ip)
