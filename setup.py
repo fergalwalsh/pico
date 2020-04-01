@@ -11,7 +11,7 @@ setup(
     download_url='https://github.com/fergalwalsh/pico/tarball/%s' % version,
     packages=['pico', 'pico.extras'],
     test_suite='nose2.collector.collector',
-    install_requires=['wrapt >= 1.8.0', 'Werkzeug >= 0.12.1', 'requests >= 2.9.1'],
+    install_requires=['wrapt >= 1.8.0', 'Werkzeug >= 0.16.1', 'requests >= 2.9.1'],
     include_package_data=True,
     classifiers=(
         'Programming Language :: Python',
